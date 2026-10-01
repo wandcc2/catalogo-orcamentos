@@ -12,10 +12,53 @@ st.set_page_config(
 )
 
 # -------------------------------------------------------------------
+# ESTILIZAÇÃO CSS PERSONALIZADA PARA OS BOTÕES DA BARRA LATERAL
+# -------------------------------------------------------------------
+st.markdown("""
+    <style>
+        /* Estilização geral dos botões na barra lateral */
+        div[data-testid="stSidebar"] button[kind="secondary"],
+        div[data-testid="stSidebar"] button[kind="primary"] {
+            width: 100% !important;
+            border-radius: 8px !important;
+            padding: 10px 16px !important;
+            font-size: 15px !important;
+            font-weight: 500 !important;
+            text-align: left !important;
+            justify-content: flex-start !important;
+            margin-bottom: 6px !important;
+            transition: all 0.3s ease !important;
+        }
+
+        /* Botão Inativo (Secundário) */
+        div[data-testid="stSidebar"] button[kind="secondary"] {
+            background-color: transparent !important;
+            border: 1px solid rgba(255, 255, 255, 0.1) !important;
+            color: #d0d7de !important;
+        }
+
+        div[data-testid="stSidebar"] button[kind="secondary"]:hover {
+            background-color: rgba(255, 255, 255, 0.08) !important;
+            border-color: rgba(255, 255, 255, 0.25) !important;
+            color: #ffffff !important;
+            transform: translateX(4px);
+        }
+
+        /* Botão Ativo (Primário) */
+        div[data-testid="stSidebar"] button[kind="primary"] {
+            background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%) !important;
+            color: #ffffff !important;
+            border: none !important;
+            box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3) !important;
+        }
+    </style>
+""", unsafe_allow_html=True)
+
+# -------------------------------------------------------------------
 # SISTEMA DE AUTENTICAÇÃO (LOGIN)
 # -------------------------------------------------------------------
 def verificar_login():
-    """Gere a tela de login e valida usuario e senha."""
+    """Gere a tela de login e valida usuário e senha."""
     if "autenticado" not in st.session_state:
         st.session_state.autenticado = False
 
@@ -42,16 +85,13 @@ def verificar_login():
 if not verificar_login():
     st.stop()
 
-# Botão de Logout na Barra Lateral
-st.sidebar.button("🚪 Sair (Logout)", on_click=lambda: st.session_state.update({"autenticado": False}))
-
+# -------------------------------------------------------------------
+# CONFIGURAÇÃO DE DIRETÓRIO E BANCO DE DADOS
+# -------------------------------------------------------------------
 UPLOADS_DIR = "uploads"
 if not os.path.exists(UPLOADS_DIR):
     os.makedirs(UPLOADS_DIR)
 
-# -------------------------------------------------------------------
-# FUNÇÕES DE BANCO DE DADOS (SQLITE)
-# -------------------------------------------------------------------
 def init_db():
     conn = sqlite3.connect("catalogo.db")
     c = conn.cursor()
@@ -105,16 +145,37 @@ def listar_produtos():
     return df
 
 # -------------------------------------------------------------------
-# NAVEGAÇÃO
+# BARRA LATERAL COM BOTÕES DE NAVEGAÇÃO
 # -------------------------------------------------------------------
-st.title("📦 Sistema de Catálogo e Orçamentos")
+if "pagina_atual" not in st.session_state:
+    st.session_state.pagina_atual = "📋 Catálogo de Produtos"
 
-menu = st.sidebar.radio("Navegação", [
-    "📋 Catálogo de Produtos", 
-    "➕ Cadastrar Produto", 
-    "✏️ Editar / Excluir Produto", 
-    "📝 Criar Orçamento"
-])
+with st.sidebar:
+    st.markdown("### 📌 Navegação")
+    
+    opcoes = [
+        "📋 Catálogo de Produtos", 
+        "➕ Cadastrar Produto", 
+        "✏️ Editar / Excluir Produto", 
+        "📝 Criar Orçamento"
+    ]
+
+    for opcao in opcoes:
+        # Se for a página atual, aplica o estilo de destaque (primary)
+        tipo_botao = "primary" if st.session_state.pagina_atual == opcao else "secondary"
+        
+        if st.button(opcao, key=f"nav_{opcao}", type=tipo_botao, use_container_width=True):
+            st.session_state.pagina_atual = opcao
+            st.rerun()
+
+    st.divider()
+    
+    # Botão de Logout ao final do menu
+    if st.button("🚪 Sair (Logout)", type="secondary", use_container_width=True):
+        st.session_state.autenticado = False
+        st.rerun()
+
+menu = st.session_state.pagina_atual
 
 # -------------------------------------------------------------------
 # ABA 1: CATÁLOGO DE PRODUTOS
@@ -187,7 +248,6 @@ elif menu == "✏️ Editar / Excluir Produto":
     if df_produtos.empty:
         st.info("Nenhum produto cadastrado para edição.")
     else:
-        # Seleção do produto
         opcoes_produtos = {f"{row['id']} - {row['nome']}": row for _, row in df_produtos.iterrows()}
         produto_selecionado_str = st.selectbox("Selecione o produto que deseja alterar:", list(opcoes_produtos.keys()))
         
@@ -238,7 +298,7 @@ elif menu == "✏️ Editar / Excluir Produto":
 
         st.divider()
         st.subheader("⚠️ Zona de Perigo")
-        if st.button("🗑️️ Excluir Produto do Catálogo", type="primary"):
+        if st.button("🗑 Excluir Produto do Catálogo", type="primary"):
             excluir_produto(produto_atual["id"])
             st.success(f"Produto '{produto_atual['nome']}' foi excluído.")
             st.rerun()
