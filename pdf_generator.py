@@ -5,6 +5,7 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib import colors
 
 def obter_logo_cabecalho():
+    """Verifica se existe uma imagem de logo na raiz do projeto e a retorna formatada."""
     caminhos_possiveis = ["logo.png", "logo.jpg", "logo.jpeg"]
     for caminho in caminhos_possiveis:
         if os.path.exists(caminho):
@@ -15,6 +16,10 @@ def obter_logo_cabecalho():
     return None
 
 def gerar_pdf_cliente(carrinho, output_path="orcamento_cliente.pdf", nome_cliente="Cliente"):
+    """
+    Gera o PDF do orçamento para o cliente com logo, descontos por quantidade 
+    e condições de pagamento.
+    """
     doc = SimpleDocTemplate(
         output_path,
         pagesize=letter,
@@ -34,6 +39,9 @@ def gerar_pdf_cliente(carrinho, output_path="orcamento_cliente.pdf", nome_client
         spaceAfter=6
     )
 
+    # -------------------------------------------------------------------
+    # CABEÇALHO (LOGO + TÍTULO / CLIENTE)
+    # -------------------------------------------------------------------
     img_logo = obter_logo_cabecalho()
     p_titulo = Paragraph(f"<b>ORÇAMENTO DE VENDA</b><br/><font size=11 color='#555555'>Cliente: {nome_cliente}</font>", title_style)
 
@@ -50,6 +58,9 @@ def gerar_pdf_cliente(carrinho, output_path="orcamento_cliente.pdf", nome_client
 
     story.append(Spacer(1, 15))
 
+    # -------------------------------------------------------------------
+    # TABELA DE PRODUTOS
+    # -------------------------------------------------------------------
     data = [["Imagem", "Produto", "Qtd", "Preço Tab.", "Desc.", "Preço Un.", "Subtotal (R$)"]]
     total = 0.0
 
@@ -79,7 +90,12 @@ def gerar_pdf_cliente(carrinho, output_path="orcamento_cliente.pdf", nome_client
             f"R$ {subtotal:.2f}"
         ])
 
-    data.append(["", "", "", "", "", Paragraph("<b>Total:</b>", styles['Normal']), f"<b>R$ {total:.2f}</b>"])
+    # LINHA DO TOTAL (FORMATADA COM PARAGRAPH CORRETAMENTE)
+    data.append([
+        "", "", "", "", "", 
+        Paragraph("<b>Total:</b>", styles['Normal']), 
+        Paragraph(f"<b>R$ {total:.2f}</b>", styles['Normal'])
+    ])
 
     col_widths = [50, 180, 35, 75, 45, 75, 80]
     t = Table(data, colWidths=col_widths)
@@ -96,9 +112,11 @@ def gerar_pdf_cliente(carrinho, output_path="orcamento_cliente.pdf", nome_client
     ]))
 
     story.append(t)
-    story.append(Spacer(1, 15))
+    story.append(Spacer(1, 20))
 
+    # -------------------------------------------------------------------
     # CONDIÇÕES DE PAGAMENTO
+    # -------------------------------------------------------------------
     desconto_avista = total * 0.10
     total_avista = total - desconto_avista
     entrada_50 = total / 2.0
@@ -133,6 +151,9 @@ def gerar_pdf_cliente(carrinho, output_path="orcamento_cliente.pdf", nome_client
 
 
 def gerar_pdf_interno(carrinho, output_path="relatorio_custos_interno.pdf"):
+    """
+    Gera o PDF do relatório interno de custos, margem bruta e lucro previsto.
+    """
     doc = SimpleDocTemplate(
         output_path,
         pagesize=letter,
@@ -199,7 +220,12 @@ def gerar_pdf_interno(carrinho, output_path="relatorio_custos_interno.pdf"):
 
     lucro_total = total_venda - total_custo
 
-    data.append(["Total Geral", "", "", "", "", f"{total_custo:.2f}", f"{total_venda:.2f}", f"{lucro_total:.2f}"])
+    data.append([
+        "Total Geral", "", "", "", "", 
+        f"{total_custo:.2f}", 
+        f"{total_venda:.2f}", 
+        f"{lucro_total:.2f}"
+    ])
 
     t = Table(data, colWidths=[120, 30, 55, 55, 65, 70, 75, 70])
     t.setStyle(TableStyle([
