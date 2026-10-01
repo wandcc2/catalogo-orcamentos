@@ -14,16 +14,16 @@ st.set_page_config(
 # -------------------------------------------------------------------
 # FUNÇÃO PARA CALCULAR DESCONTO PROGRESSIVO
 # -------------------------------------------------------------------
-def calcular_desconto_progressivo(quantidade, preco_venda_original):
+def calcular_desconto_progressivo(quantidade, preco_venda_original, permite_desconto):
     """
-    Aplica a regra de desconto baseada na quantidade:
-    - Até 10 peças: 0% de desconto
-    - 11 a 19 peças: 10% de desconto
-    - 20 ou mais peças: 15% de desconto
+    Aplica a regra de desconto baseada na quantidade apenas se permite_desconto for True/1:
+    - Até 10 peças: 0%
+    - 11 a 19 peças: 10%
+    - 20 ou mais peças: 15%
     """
-    if quantidade >= 20:
+    if permite_desconto and quantidade >= 20:
         percentual_desconto = 0.15
-    elif quantidade >= 11:
+    elif permite_desconto and quantidade >= 11:
         percentual_desconto = 0.10
     else:
         percentual_desconto = 0.0
@@ -117,32 +117,39 @@ def init_db():
             descricao TEXT,
             preco_custo REAL NOT NULL,
             preco_venda REAL NOT NULL,
-            imagem_path TEXT
+            imagem_path TEXT,
+            permite_desconto INTEGER DEFAULT 1
         )
     ''')
+    # Tenta adicionar a coluna permite_desconto caso a tabela já existisse antes
+    try:
+        c.execute('ALTER TABLE produtos ADD COLUMN permite_desconto INTEGER DEFAULT 1')
+    except Exception:
+        pass
+
     conn.commit()
     conn.close()
 
 init_db()
 
-def cadastrar_produto(nome, descricao, preco_custo, preco_venda, imagem_path):
+def cadastrar_produto(nome, descricao, preco_custo, preco_venda, imagem_path, permite_desconto):
     conn = sqlite3.connect("catalogo.db")
     c = conn.cursor()
     c.execute('''
-        INSERT INTO produtos (nome, descricao, preco_custo, preco_venda, imagem_path)
-        VALUES (?, ?, ?, ?, ?)
-    ''', (nome, descricao, preco_custo, preco_venda, imagem_path))
+        INSERT INTO produtos (nome, descricao, preco_custo, preco_venda, imagem_path, permite_desconto)
+        VALUES (?, ?, ?, ?, ?, ?)
+    ''', (nome, descricao, preco_custo, preco_venda, imagem_path, 1 if permite_desconto else 0))
     conn.commit()
     conn.close()
 
-def atualizar_produto(prod_id, nome, descricao, preco_custo, preco_venda, imagem_path):
+def atualizar_produto(prod_id, nome, descricao, preco_custo, preco_venda, imagem_path, permite_desconto):
     conn = sqlite3.connect("catalogo.db")
     c = conn.cursor()
     c.execute('''
         UPDATE produtos 
-        SET nome = ?, descricao = ?, preco_custo = ?, preco_venda = ?, imagem_path = ?
+        SET nome = ?, descricao = ?, preco_custo = ?, preco_venda = ?, imagem_path = ?, permite_desconto = ?
         WHERE id = ?
-    ''', (nome, descricao, preco_custo, preco_venda, imagem_path, prod_id))
+    ''', (nome, descricao, preco_custo, preco_venda, imagem_path, 1 if permite_desconto else 0, prod_id))
     conn.commit()
     conn.close()
 
@@ -204,7 +211,9 @@ if menu == "📋 Catálogo de Produtos":
         st.caption(f"Exibindo {len(df_produtos)} produto(s). Clique em um item para ver detalhes e imagem.")
 
         for _, row in df_produtos.iterrows():
-            titulo_item = f"📦 {row['nome']}  —  R$ {row['preco_venda']:.2f}"
+            tag_desconto = "🏷️ Aceita Desc. Progressivo" if row.get("permite_desconto", 1) == 1 else "🚫 Sem Desc. Progressivo"
+            titulo_item = f"📦 {row['nome']}  —  R$ {row['preco_venda']:.2f}  ({tag_desconto})"
+            
             with st.expander(titulo_item):
                 col_img, col_detalhes = st.columns([1, 2])
                 with col_img:
@@ -216,6 +225,7 @@ if menu == "📋 Catálogo de Produtos":
                 with col_detalhes:
                     st.markdown(f"### {row['nome']}")
                     st.write(f"**Descrição:** {row['descricao'] or 'Sem descrição'}")
+                    st.caption(f"Configuração de Desconto: **{tag_desconto}**")
                     st.divider()
                     
                     c1, c2, c3 = st.columns(3)
@@ -239,6 +249,8 @@ elif menu == "➕ Cadastrar Produto":
         with col2:
             preco_venda = st.number_input("Preço de Venda (R$) *", min_value=0.0, format="%.2f")
 
+        permite_desconto = st.checkbox("Permitir Desconto Progressivo por Quantidade para este item", value=True)
+
         foto = st.file_uploader("Foto do Produto", type=["png", "jpg", "jpeg"])
         submitted = st.form_submit_button("Salvar Produto")
 
@@ -252,7 +264,7 @@ elif menu == "➕ Cadastrar Produto":
                     with open(caminho_imagem, "wb") as f:
                         f.write(foto.getbuffer())
 
-                cadastrar_produto(nome, descricao, preco_custo, preco_venda, caminho_imagem)
+                cadastrar_produto(nome, descricao, preco_custo, preco_venda, caminho_imagem, permite_desconto)
                 st.success(f"Produto '{nome}' cadastrado com sucesso!")
 
 # -------------------------------------------------------------------
@@ -289,6 +301,11 @@ elif menu == "✏️ Editar / Excluir Produto":
                 with c2:
                     novo_venda = st.number_input("Preço de Venda (R$)", value=float(produto_atual["preco_venda"]), min_value=0.0, format="%.2f")
 
+                novo_permite_desconto = st.checkbox(
+                    "Permitir Desconto Progressivo por Quantidade para este item",
+                    value=bool(produto_atual.get("permite_desconto", 1))
+                )
+
                 nova_foto = st.file_uploader("Substituir Imagem (Deixe vazio para manter a atual)", type=["png", "jpg", "jpeg"])
                 btn_atualizar = st.form_submit_button("💾 Salvar Alterações")
 
@@ -299,7 +316,15 @@ elif menu == "✏️ Editar / Excluir Produto":
                         with open(caminho_imagem, "wb") as f:
                             f.write(nova_foto.getbuffer())
 
-                    atualizar_produto(produto_atual["id"], novo_nome, nova_descricao, novo_custo, novo_venda, caminho_imagem)
+                    atualizar_produto(
+                        produto_atual["id"], 
+                        novo_nome, 
+                        nova_descricao, 
+                        novo_custo, 
+                        novo_venda, 
+                        caminho_imagem, 
+                        novo_permite_desconto
+                    )
                     st.success("Produto atualizado com sucesso!")
                     st.rerun()
 
@@ -311,7 +336,7 @@ elif menu == "✏️ Editar / Excluir Produto":
             st.rerun()
 
 # -------------------------------------------------------------------
-# ABA 4: CRIAR ORÇAMENTO (COM DESCONTO PROGRESSIVO)
+# ABA 4: CRIAR ORÇAMENTO
 # -------------------------------------------------------------------
 elif menu == "📝 Criar Orçamento":
     st.header("Montar Orçamento")
@@ -326,29 +351,36 @@ elif menu == "📝 Criar Orçamento":
         if "carrinho" not in st.session_state:
             st.session_state.carrinho = []
 
-        produto_selecionado = st.selectbox("Escolha um produto", df_produtos["nome"].tolist())
+        produto_selecionado_nome = st.selectbox("Escolha um produto", df_produtos["nome"].tolist())
         qtd = st.number_input("Quantidade de Peças", min_value=1, value=1, step=1)
 
-        # Informação em tempo real sobre a faixa de desconto atrelada à quantidade escolhida
-        pct_disc, _ = calcular_desconto_progressivo(qtd, 1.0)
-        if pct_disc > 0:
-            st.info(f"🎉 Desconto Progressivo Aplicado: **{int(pct_disc*100)}% de Desconto** para {qtd} unidades!")
+        item_dados = df_produtos[df_produtos["nome"] == produto_selecionado_nome].iloc[0].to_dict()
+        permite_desc = bool(item_dados.get("permite_desconto", 1))
+
+        # Alerta visual do desconto na tela de orçamento
+        pct_disc, _ = calcular_desconto_progressivo(qtd, 1.0, permite_desc)
+        if permite_desc:
+            if pct_disc > 0:
+                st.info(f"🎉 Desconto Progressivo Aplicado: **{int(pct_disc*100)}% de Desconto** para {qtd} unidades!")
+            else:
+                st.caption("💡 Este item possui desconto por quantidade (a partir de 11 un. ganha 10%, a partir de 20 un. ganha 15%).")
         else:
-            st.caption("💡 Dica: A partir de 11 unidades você ganha 10% de desconto, e a partir de 20 unidades ganha 15%!")
+            st.warning("⚠️ Este produto não possui opção de desconto por quantidade.")
 
         if st.button("Adicionar ao Orçamento"):
-            item_dados = df_produtos[df_produtos["nome"] == produto_selecionado].iloc[0].to_dict()
-            
-            # Aplica a regra de desconto
-            pct_desconto, preco_venda_com_desconto = calcular_desconto_progressivo(qtd, item_dados["preco_venda"])
+            pct_desconto, preco_venda_com_desconto = calcular_desconto_progressivo(
+                qtd, 
+                item_dados["preco_venda"], 
+                permite_desc
+            )
             
             item_dados["quantidade"] = qtd
             item_dados["preco_venda_original"] = item_dados["preco_venda"]
             item_dados["preco_venda"] = preco_venda_com_desconto
-            item_dados["desconto_aplicado"] = f"{int(pct_desconto * 100)}%"
+            item_dados["desconto_aplicado"] = f"{int(pct_desconto * 100)}%" if permite_desc else "N/A"
             
             st.session_state.carrinho.append(item_dados)
-            st.success(f"{qtd}x '{produto_selecionado}' adicionado com {int(pct_desconto * 100)}% de desconto!")
+            st.success(f"{qtd}x '{produto_selecionado_nome}' adicionado!")
 
         if st.session_state.carrinho:
             st.subheader("2. Itens no Orçamento Atual")
