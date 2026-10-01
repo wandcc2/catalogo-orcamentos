@@ -11,6 +11,44 @@ st.set_page_config(
     layout="wide"
 )
 
+# -------------------------------------------------------------------
+# SISTEMA DE AUTENTICAÇÃO (LOGIN)
+# -------------------------------------------------------------------
+def verificar_login():
+    """Gere a tela de login e valida usuario e senha."""
+    if "autenticado" not in st.session_state:
+        st.session_state.autenticado = False
+
+    if not st.session_state.autenticado:
+        col1, col2, col3 = st.columns([1, 2, 1])
+        with col2:
+            st.subheader("🔒 Acesso Restrito - Faça Login")
+            with st.form("form_login"):
+                usuario = st.text_input("Usuário")
+                senha = st.text_input("Senha", type="password")
+                btn_login = st.form_submit_button("Entrar")
+
+                if btn_login:
+                    if usuario == "admin" and senha == "050391":
+                        st.session_state.autenticado = True
+                        st.success("Login realizado com sucesso!")
+                        st.rerun()
+                    else:
+                        st.error("Usuário ou senha incorretos.")
+        return False
+    return True
+
+# Se não estiver logado, interrompe a execução aqui
+if not verificar_login():
+    st.stop()
+
+# -------------------------------------------------------------------
+# APLICAÇÃO PRINCIPAL (SÓ ACESSÍVEL APÓS LOGIN)
+# -------------------------------------------------------------------
+
+# Botão de Logout na Barra Lateral
+st.sidebar.button("🚪 Sair (Logout)", on_click=lambda: st.session_state.update({"autenticado": False}))
+
 UPLOADS_DIR = "uploads"
 if not os.path.exists(UPLOADS_DIR):
     os.makedirs(UPLOADS_DIR)
