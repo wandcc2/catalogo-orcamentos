@@ -38,13 +38,9 @@ def verificar_login():
         return False
     return True
 
-# Se não estiver logado, interrompe a execução aqui
+# Se não estiver logado, interrompe a execução
 if not verificar_login():
     st.stop()
-
-# -------------------------------------------------------------------
-# APLICAÇÃO PRINCIPAL (SÓ ACESSÍVEL APÓS LOGIN)
-# -------------------------------------------------------------------
 
 # Botão de Logout na Barra Lateral
 st.sidebar.button("🚪 Sair (Logout)", on_click=lambda: st.session_state.update({"autenticado": False}))
@@ -53,7 +49,9 @@ UPLOADS_DIR = "uploads"
 if not os.path.exists(UPLOADS_DIR):
     os.makedirs(UPLOADS_DIR)
 
-# Inicialização do Banco de Dados
+# -------------------------------------------------------------------
+# FUNÇÕES DE BANCO DE DADOS (SQLITE)
+# -------------------------------------------------------------------
 def init_db():
     conn = sqlite3.connect("catalogo.db")
     c = conn.cursor()
@@ -82,15 +80,41 @@ def cadastrar_produto(nome, descricao, preco_custo, preco_venda, imagem_path):
     conn.commit()
     conn.close()
 
+def atualizar_produto(prod_id, nome, descricao, preco_custo, preco_venda, imagem_path):
+    conn = sqlite3.connect("catalogo.db")
+    c = conn.cursor()
+    c.execute('''
+        UPDATE produtos 
+        SET nome = ?, descricao = ?, preco_custo = ?, preco_venda = ?, imagem_path = ?
+        WHERE id = ?
+    ''', (nome, descricao, preco_custo, preco_venda, imagem_path, prod_id))
+    conn.commit()
+    conn.close()
+
+def excluir_produto(prod_id):
+    conn = sqlite3.connect("catalogo.db")
+    c = conn.cursor()
+    c.execute('DELETE FROM produtos WHERE id = ?', (prod_id,))
+    conn.commit()
+    conn.close()
+
 def listar_produtos():
     conn = sqlite3.connect("catalogo.db")
     df = pd.read_sql_query("SELECT * FROM produtos", conn)
     conn.close()
     return df
 
+# -------------------------------------------------------------------
+# NAVEGAÇÃO
+# -------------------------------------------------------------------
 st.title("📦 Sistema de Catálogo e Orçamentos")
 
-menu = st.sidebar.radio("Navegação", ["📋 Catálogo de Produtos", "➕ Cadastrar Produto", "📝 Criar Orçamento"])
+menu = st.sidebar.radio("Navegação", [
+    "📋 Catálogo de Produtos", 
+    "➕ Cadastrar Produto", 
+    "✏️ Editar / Excluir Produto", 
+    "📝 Criar Orçamento"
+])
 
 # -------------------------------------------------------------------
 # ABA 1: CATÁLOGO DE PRODUTOS
@@ -154,7 +178,73 @@ elif menu == "➕ Cadastrar Produto":
                 st.success(f"Produto '{nome}' cadastrado com sucesso!")
 
 # -------------------------------------------------------------------
-# ABA 3: CRIAR ORÇAMENTO
+# ABA 3: EDITAR / EXCLUIR PRODUTO
+# -------------------------------------------------------------------
+elif menu == "✏️ Editar / Excluir Produto":
+    st.header("Editar ou Excluir Produto")
+    df_produtos = listar_produtos()
+
+    if df_produtos.empty:
+        st.info("Nenhum produto cadastrado para edição.")
+    else:
+        # Seleção do produto
+        opcoes_produtos = {f"{row['id']} - {row['nome']}": row for _, row in df_produtos.iterrows()}
+        produto_selecionado_str = st.selectbox("Selecione o produto que deseja alterar:", list(opcoes_produtos.keys()))
+        
+        produto_atual = opcoes_produtos[produto_selecionado_str]
+
+        col_edit, col_img = st.columns([2, 1])
+
+        with col_img:
+            st.subheader("Imagem Atual")
+            if produto_atual["imagem_path"] and os.path.exists(produto_atual["imagem_path"]):
+                st.image(produto_atual["imagem_path"], use_container_width=True)
+            else:
+                st.caption("Sem imagem cadastrada.")
+
+        with col_edit:
+            with st.form("form_editar_produto"):
+                novo_nome = st.text_input("Nome do Produto", value=produto_atual["nome"])
+                nova_descricao = st.text_area("Descrição", value=produto_atual["descricao"] or "")
+                
+                c1, c2 = st.columns(2)
+                with c1:
+                    novo_custo = st.number_input("Preço de Custo (R$)", value=float(produto_atual["preco_custo"]), min_value=0.0, format="%.2f")
+                with c2:
+                    novo_venda = st.number_input("Preço de Venda (R$)", value=float(produto_atual["preco_venda"]), min_value=0.0, format="%.2f")
+
+                nova_foto = st.file_uploader("Substituir Imagem (Deixe vazio para manter a atual)", type=["png", "jpg", "jpeg"])
+
+                btn_atualizar = st.form_submit_button("💾 Salvar Alterações")
+
+                if btn_atualizar:
+                    caminho_imagem = produto_atual["imagem_path"]
+                    
+                    if nova_foto is not None:
+                        caminho_imagem = os.path.join(UPLOADS_DIR, nova_foto.name)
+                        with open(caminho_imagem, "wb") as f:
+                            f.write(nova_foto.getbuffer())
+
+                    atualizar_produto(
+                        produto_atual["id"],
+                        novo_nome,
+                        nova_descricao,
+                        novo_custo,
+                        novo_venda,
+                        caminho_imagem
+                    )
+                    st.success("Produto atualizado com sucesso!")
+                    st.rerun()
+
+        st.divider()
+        st.subheader("⚠️ Zona de Perigo")
+        if st.button("🗑️️ Excluir Produto do Catálogo", type="primary"):
+            excluir_produto(produto_atual["id"])
+            st.success(f"Produto '{produto_atual['nome']}' foi excluído.")
+            st.rerun()
+
+# -------------------------------------------------------------------
+# ABA 4: CRIAR ORÇAMENTO
 # -------------------------------------------------------------------
 elif menu == "📝 Criar Orçamento":
     st.header("Montar Orçamento")
