@@ -161,7 +161,6 @@ with st.sidebar:
     ]
 
     for opcao in opcoes:
-        # Se for a página atual, aplica o estilo de destaque (primary)
         tipo_botao = "primary" if st.session_state.pagina_atual == opcao else "secondary"
         
         if st.button(opcao, key=f"nav_{opcao}", type=tipo_botao, use_container_width=True):
@@ -170,7 +169,6 @@ with st.sidebar:
 
     st.divider()
     
-    # Botão de Logout ao final do menu
     if st.button("🚪 Sair (Logout)", type="secondary", use_container_width=True):
         st.session_state.autenticado = False
         st.rerun()
@@ -178,7 +176,7 @@ with st.sidebar:
 menu = st.session_state.pagina_atual
 
 # -------------------------------------------------------------------
-# ABA 1: CATÁLOGO DE PRODUTOS
+# ABA 1: CATÁLOGO DE PRODUTOS (FORMATO LISTA INTERATIVA)
 # -------------------------------------------------------------------
 if menu == "📋 Catálogo de Produtos":
     st.header("Catálogo de Produtos")
@@ -187,23 +185,39 @@ if menu == "📋 Catálogo de Produtos":
     if df_produtos.empty:
         st.info("Nenhum produto cadastrado ainda.")
     else:
-        cols = st.columns(3)
-        for index, row in df_produtos.iterrows():
-            col = cols[index % 3]
-            with col:
-                st.subheader(row["nome"])
-                if row["imagem_path"] and os.path.exists(row["imagem_path"]):
-                    st.image(row["imagem_path"], use_container_width=True)
-                else:
-                    st.caption("Sem imagem cadastrada")
-                
-                st.write(f"**Descrição:** {row['descricao']}")
-                st.write(f"**Custo (Interno):** R$ {row['preco_custo']:.2f}")
-                st.write(f"**Venda (Cliente):** R$ {row['preco_venda']:.2f}")
-                
-                margem = row['preco_venda'] - row['preco_custo']
-                st.caption(f"Margem Bruta: R$ {margem:.2f}")
-                st.divider()
+        # Campo de busca rápido
+        busca = st.text_input("🔍 Buscar produto por nome...", "")
+        
+        if busca:
+            df_produtos = df_produtos[df_produtos["nome"].str.contains(busca, case=False, na=False)]
+
+        st.caption(f"Exibindo {len(df_produtos)} produto(s). Clique em um item para ver detalhes e imagem.")
+
+        for _, row in df_produtos.iterrows():
+            # Título do item na lista mostrando nome e preço de venda
+            titulo_item = f"📦 {row['nome']}  —  R$ {row['preco_venda']:.2f}"
+            
+            with st.expander(titulo_item):
+                col_img, col_detalhes = st.columns([1, 2])
+
+                with col_img:
+                    if row["imagem_path"] and os.path.exists(row["imagem_path"]):
+                        st.image(row["imagem_path"], use_container_width=True)
+                    else:
+                        st.info("Sem imagem cadastrada")
+
+                with col_detalhes:
+                    st.markdown(f"### {row['nome']}")
+                    st.write(f"**Descrição:** {row['descricao'] or 'Sem descrição'}")
+                    
+                    st.divider()
+                    
+                    c1, c2, c3 = st.columns(3)
+                    c1.metric("Preço de Custo", f"R$ {row['preco_custo']:.2f}")
+                    c2.metric("Preço de Venda", f"R$ {row['preco_venda']:.2f}")
+                    
+                    margem = row['preco_venda'] - row['preco_custo']
+                    c3.metric("Margem Bruta", f"R$ {margem:.2f}")
 
 # -------------------------------------------------------------------
 # ABA 2: CADASTRAR PRODUTO
@@ -241,7 +255,7 @@ elif menu == "➕ Cadastrar Produto":
 # -------------------------------------------------------------------
 # ABA 3: EDITAR / EXCLUIR PRODUTO
 # -------------------------------------------------------------------
-elif menu == "✏️ Editar / Excluir Produto":
+elif menu == "✏️️ Editar / Excluir Produto":
     st.header("Editar ou Excluir Produto")
     df_produtos = listar_produtos()
 
