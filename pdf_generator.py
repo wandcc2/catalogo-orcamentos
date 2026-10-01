@@ -4,35 +4,75 @@ from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, Tabl
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib import colors
 
+# Caminho da imagem da logo (pode ser .png ou .jpg na raiz do projeto)
+LOGO_PATH = "logo.png"
+
+def obter_logo_cabecalho():
+    """Verifica se existe uma imagem de logo e a retorna formatada para o ReportLab."""
+    caminhos_possiveis = ["logo.png", "logo.jpg", "logo.jpeg"]
+    for caminho in caminhos_possiveis:
+        if os.path.exists(caminho):
+            try:
+                # Ajuste a largura e altura desejada para a sua logo no topo
+                return Image(caminho, width=120, height=50)
+            except Exception:
+                return None
+    return None
+
 def gerar_pdf_cliente(carrinho, output_path="orcamento_cliente.pdf", nome_cliente="Cliente"):
-    """Gera o PDF de orçamento voltado para o cliente (com preço de venda e condições de pagamento)."""
-    doc = SimpleDocTemplate(output_path, pagesize=letter)
+    """Gera o PDF de orçamento voltado para o cliente (com logo, preço e condições de pagamento)."""
+    doc = SimpleDocTemplate(
+        output_path,
+        pagesize=letter,
+        rightMargin=36,
+        leftMargin=36,
+        topMargin=36,
+        bottomMargin=36
+    )
     story = []
     styles = getSampleStyleSheet()
 
     title_style = ParagraphStyle(
         'TitleStyle',
         parent=styles['Heading1'],
-        fontSize=20,
+        fontSize=18,
         textColor=colors.HexColor('#1A2B4C'),
-        spaceAfter=12
+        spaceAfter=6
     )
 
-    story.append(Paragraph(f"<b>Orçamento para:</b> {nome_cliente}", title_style))
-    story.append(Spacer(1, 12))
+    # -------------------------------------------------------------------
+    # CABEÇALHO (LOGO + TÍTULO / DADOS DO CLIENTE)
+    # -------------------------------------------------------------------
+    img_logo = obter_logo_cabecalho()
+    p_titulo = Paragraph(f"<b>ORÇAMENTO DE VENDA</b><br/><font size=11 color='#555555'>Cliente: {nome_cliente}</font>", title_style)
 
-    # Tabela com as colunas do cliente
+    if img_logo:
+        # Coloca a logo à esquerda e o título/cliente à direita
+        header_table = Table([[img_logo, p_titulo]], colWidths=[140, 400])
+        header_table.setStyle(TableStyle([
+            ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+            ('ALIGN', (0,0), (0,0), 'LEFT'),
+            ('ALIGN', (1,0), (1,0), 'RIGHT'),
+        ]))
+        story.append(header_table)
+    else:
+        story.append(p_titulo)
+
+    story.append(Spacer(1, 15))
+
+    # -------------------------------------------------------------------
+    # TABELA DE PRODUTOS
+    # -------------------------------------------------------------------
     data = [["Imagem", "Produto", "Qtd", "Preço Unit. (R$)", "Subtotal (R$)"]]
-    
     total = 0.0
 
     for item in carrinho:
         img = "Sem Imagem"
         if item.get("imagem_path") and os.path.exists(item["imagem_path"]):
             try:
-                img = Image(item["imagem_path"], width=50, height=50)
+                img = Image(item["imagem_path"], width=45, height=45)
             except Exception:
-                img = "Erro Img"
+                img = "Sem Imagem"
 
         qtd = item["quantidade"]
         venda = item["preco_venda"]
@@ -50,7 +90,7 @@ def gerar_pdf_cliente(carrinho, output_path="orcamento_cliente.pdf", nome_client
     # Linha com o Total
     data.append(["", "", "", Paragraph("<b>Total:</b>", styles['Normal']), f"R$ {total:.2f}"])
 
-    t = Table(data, colWidths=[60, 200, 40, 100, 100])
+    t = Table(data, colWidths=[60, 240, 40, 100, 100])
     t.setStyle(TableStyle([
         ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#1A2B4C')),
         ('TEXTCOLOR', (0,0), (-1,0), colors.whitesmoke),
@@ -66,7 +106,7 @@ def gerar_pdf_cliente(carrinho, output_path="orcamento_cliente.pdf", nome_client
     story.append(Spacer(1, 20))
 
     # -------------------------------------------------------------------
-    # CONDIÇÕES DE PAGAMENTO (DESCONTO À VISTA E FATOR PARCELADO)
+    # CONDIÇÕES DE PAGAMENTO
     # -------------------------------------------------------------------
     desconto_avista = total * 0.10
     total_avista = total - desconto_avista
@@ -88,8 +128,7 @@ def gerar_pdf_cliente(carrinho, output_path="orcamento_cliente.pdf", nome_client
 
     p_condicoes = Paragraph(condicoes_html, style_box)
 
-    # Tabela estilizada para envelopar as condições de pagamento
-    t_condicoes = Table([[p_condicoes]], colWidths=[500])
+    t_condicoes = Table([[p_condicoes]], colWidths=[540])
     t_condicoes.setStyle(TableStyle([
         ('BACKGROUND', (0,0), (-1,-1), colors.HexColor('#F2F4F8')),
         ('BOX', (0,0), (-1,-1), 1, colors.HexColor('#1A2B4C')),
@@ -103,21 +142,41 @@ def gerar_pdf_cliente(carrinho, output_path="orcamento_cliente.pdf", nome_client
 
 
 def gerar_pdf_interno(carrinho, output_path="relatorio_custos_interno.pdf"):
-    """Gera o PDF de relatório interno com custos, margem e lucros previstos."""
-    doc = SimpleDocTemplate(output_path, pagesize=letter)
+    """Gera o PDF de relatório interno com custos e lucros."""
+    doc = SimpleDocTemplate(
+        output_path,
+        pagesize=letter,
+        rightMargin=36,
+        leftMargin=36,
+        topMargin=36,
+        bottomMargin=36
+    )
     story = []
     styles = getSampleStyleSheet()
 
     title_style = ParagraphStyle(
         'TitleStyle',
         parent=styles['Heading1'],
-        fontSize=18,
+        fontSize=16,
         textColor=colors.HexColor('#8B0000'),
-        spaceAfter=12
+        spaceAfter=6
     )
 
-    story.append(Paragraph("Relatório Interno de Custos e Margens", title_style))
-    story.append(Spacer(1, 12))
+    img_logo = obter_logo_cabecalho()
+    p_titulo = Paragraph("<b>RELATÓRIO INTERNO DE CUSTOS E MARGENS</b>", title_style)
+
+    if img_logo:
+        header_table = Table([[img_logo, p_titulo]], colWidths=[140, 400])
+        header_table.setStyle(TableStyle([
+            ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+            ('ALIGN', (0,0), (0,0), 'LEFT'),
+            ('ALIGN', (1,0), (1,0), 'RIGHT'),
+        ]))
+        story.append(header_table)
+    else:
+        story.append(p_titulo)
+
+    story.append(Spacer(1, 15))
 
     data = [["Produto", "Qtd", "Custo (R$)", "Venda (R$)", "Subtotal Custo", "Subtotal Venda", "Lucro (R$)"]]
     
@@ -150,7 +209,7 @@ def gerar_pdf_interno(carrinho, output_path="relatorio_custos_interno.pdf"):
 
     data.append(["Total Geral", "", "", "", f"{total_custo:.2f}", f"{total_venda:.2f}", f"{lucro_total:.2f}"])
 
-    t = Table(data, colWidths=[120, 35, 65, 65, 75, 75, 65])
+    t = Table(data, colWidths=[140, 35, 65, 65, 75, 80, 80])
     t.setStyle(TableStyle([
         ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#8B0000')),
         ('TEXTCOLOR', (0,0), (-1,0), colors.whitesmoke),
