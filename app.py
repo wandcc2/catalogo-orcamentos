@@ -246,4 +246,29 @@ with st.sidebar:
 
     for opcao in opcoes:
         tipo_botao = "primary" if st.session_state.pagina_atual == opcao else "secondary"
-        if st.button(opcao, key=f"nav_{opcao}", type=tipo_botao
+        if st.button(opcao, key=f"nav_{opcao}", type=tipo_botao, use_container_width=True):
+            st.session_state.pagina_atual = opcao
+            st.rerun()
+
+    st.divider()
+    if st.button("🚪 Sair (Logout)", type="secondary", use_container_width=True):
+        st.session_state.autenticado = False
+        st.rerun()
+
+menu = st.session_state.pagina_atual
+
+# -------------------------------------------------------------------
+# ABA 1: CATÁLOGO DE PRODUTOS
+# -------------------------------------------------------------------
+if menu == "📋 Catálogo de Produtos":
+    st.header("Catálogo de Produtos")
+    df_produtos = listar_produtos()
+
+    if df_produtos.empty:
+        st.info("Nenhum produto cadastrado ainda.")
+    else:
+        busca = st.text_input("🔍 Buscar produto por nome...", "")
+        if busca:
+            df_produtos = df_produtos[df_produtos["nome"].str.contains(busca, case=False, na=False)]
+
+        st.caption(f"Exibindo {len(df_produtos)} produto(s). Clique em um item
