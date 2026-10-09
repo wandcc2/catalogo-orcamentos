@@ -127,3 +127,106 @@ def init_db():
         )
     ''')
     try:
+        c.execute('ALTER TABLE produtos ADD COLUMN permite_desconto INTEGER DEFAULT 1')
+    except Exception:
+        pass
+
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS clientes (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            nome TEXT NOT NULL,
+            documento TEXT,
+            email TEXT,
+            telefone TEXT,
+            endereco TEXT,
+            observacoes TEXT
+        )
+    ''')
+
+    conn.commit()
+    conn.close()
+
+init_db()
+
+# --- OPERAÇÕES PRODUTOS ---
+def cadastrar_produto(nome, descricao, preco_custo, preco_venda, imagem_path, permite_desconto):
+    conn = sqlite3.connect("catalogo.db")
+    c = conn.cursor()
+    c.execute('''
+        INSERT INTO produtos (nome, descricao, preco_custo, preco_venda, imagem_path, permite_desconto)
+        VALUES (?, ?, ?, ?, ?, ?)
+    ''', (nome, descricao, preco_custo, preco_venda, imagem_path, 1 if permite_desconto else 0))
+    conn.commit()
+    conn.close()
+
+def atualizar_produto(prod_id, nome, descricao, preco_custo, preco_venda, imagem_path, permite_desconto):
+    conn = sqlite3.connect("catalogo.db")
+    c = conn.cursor()
+    c.execute('''
+        UPDATE produtos 
+        SET nome = ?, descricao = ?, preco_custo = ?, preco_venda = ?, imagem_path = ?, permite_desconto = ?
+        WHERE id = ?
+    ''', (nome, descricao, preco_custo, preco_venda, imagem_path, 1 if permite_desconto else 0, prod_id))
+    conn.commit()
+    conn.close()
+
+def excluir_produto(prod_id):
+    conn = sqlite3.connect("catalogo.db")
+    c = conn.cursor()
+    c.execute('DELETE FROM produtos WHERE id = ?', (prod_id,))
+    conn.commit()
+    conn.close()
+
+def listar_produtos():
+    conn = sqlite3.connect("catalogo.db")
+    df = pd.read_sql_query("SELECT * FROM produtos", conn)
+    conn.close()
+    return df
+
+def importar_produtos_df(df):
+    conn = sqlite3.connect("catalogo.db")
+    c = conn.cursor()
+    qtd_inseridos = 0
+
+    for _, row in df.iterrows():
+        nome = str(row.get("nome", "")).strip()
+        if not nome or nome.lower() == "nan":
+            continue
+
+        descricao = str(row.get("descricao", "")) if pd.notna(row.get("descricao")) else ""
+        
+        try:
+            preco_custo = float(row.get("preco_custo", 0.0))
+        except ValueError:
+            preco_custo = 0.0
+
+        try:
+            preco_venda = float(row.get("preco_venda", 0.0))
+        except ValueError:
+            preco_venda = 0.0
+
+        permite_desc_raw = row.get("permite_desconto", 1)
+        if str(permite_desc_raw).strip().lower() in ["0", "false", "nao", "não", "n"]:
+            permite_desconto = 0
+        else:
+            permite_desconto = 1
+
+        c.execute('''
+            INSERT INTO produtos (nome, descricao, preco_custo, preco_venda, imagem_path, permite_desconto)
+            VALUES (?, ?, ?, ?, ?, ?)
+        ''', (nome, descricao, preco_custo, preco_venda, "", permite_desconto))
+        qtd_inseridos += 1
+
+    conn.commit()
+    conn.close()
+    return qtd_inseridos
+
+# --- OPERAÇÕES CLIENTES ---
+def cadastrar_cliente(nome, documento, email, telefone, endereco, observacoes):
+    conn = sqlite3.connect("catalogo.db")
+    c = conn.cursor()
+    c.execute('''
+        INSERT INTO clientes (nome, documento, email, telefone, endereco, observacoes)
+        VALUES (?, ?, ?, ?, ?, ?)
+    ''', (nome, documento, email, telefone, endereco, observacoes))
+    conn
