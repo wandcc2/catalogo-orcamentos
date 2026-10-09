@@ -115,11 +115,12 @@ def gerar_pdf_cliente(carrinho, output_path="orcamento_cliente.pdf", nome_client
     story.append(Spacer(1, 15))
 
     # -------------------------------------------------------------------
-    # TABELA INFORMATIVA DA REGRA DE DESCONTO PROGRESSIVO (ORIGINAL)
+    # TABELA INFORMATIVA DA REGRA DE DESCONTO PROGRESSIVO
     # -------------------------------------------------------------------
     regra_html = """
     <b>TABELA DE DESCONTO PROGRESSIVO POR QUANTIDADE:</b><br/>
-    • Até 10 peças: <b>Preço Normal de Tabela</b> | • De 11 a 19 peças: <b>10% de Desconto por peça</b> | • 20 peças ou mais: <b>15% de Desconto por peça</b>
+    • Até 10 un: <b>Sem Desconto</b> | • 11 a 20 un: <b>10%</b> | • 21 a 30 un: <b>15%</b><br/>
+    • 31 a 40 un: <b>20%</b> | • 41 a 50 un: <b>22%</b> | • 51+ un: <b>25% de Desconto</b>
     """
     style_regra = ParagraphStyle('RegraStyle', parent=styles['Normal'], fontSize=8.5, leading=12, textColor=colors.HexColor('#2563EB'))
     p_regra = Paragraph(regra_html, style_regra)
