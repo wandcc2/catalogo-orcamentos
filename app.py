@@ -2,7 +2,6 @@ import streamlit as st
 import os
 import sqlite3
 import pandas as pd
-import io
 from pdf_generator import gerar_pdf_cliente, gerar_pdf_interno
 
 # Configuração da página
@@ -127,26 +126,94 @@ def listar_produtos():
     conn.close()
     return df
 
-def importar_produtos_df(df):
+# --- OPERAÇÕES CLIENTES ---
+def cadastrar_cliente(nome, documento, email, telefone, endereco, observacoes):
     conn = sqlite3.connect("catalogo.db")
     c = conn.cursor()
-    qtd_inseridos = 0
+    c.execute("INSERT INTO clientes (nome, documento, email, telefone, endereco, observacoes) VALUES (?, ?, ?, ?, ?, ?)", (nome, documento, email, telefone, endereco, observacoes))
+    conn.commit()
+    conn.close()
 
-    for _, row in df.iterrows():
-        nome = str(row.get("nome", "")).strip()
-        if not nome or nome.lower() == "nan":
-            continue
+def atualizar_cliente(cliente_id, nome, documento, email, telefone, endereco, observacoes):
+    conn = sqlite3.connect("catalogo.db")
+    c = conn.cursor()
+    c.execute("UPDATE clientes SET nome = ?, documento = ?, email = ?, telefone = ?, endereco = ? WHERE id = ?", (nome, documento, email, telefone, endereco, observacoes, cliente_id))
+    conn.commit()
+    conn.close()
 
-        descricao = str(row.get("descricao", "")) if pd.notna(row.get("descricao")) else ""
-        
-        try:
-            preco_custo = float(row.get("preco_custo", 0.0))
-        except ValueError:
-            preco_custo = 0.0
+def excluir_cliente(cliente_id):
+    conn = sqlite3.connect("catalogo.db")
+    c = conn.cursor()
+    c.execute("DELETE FROM clientes WHERE id = ?", (cliente_id,))
+    conn.commit()
+    conn.close()
 
-        try:
-            preco_venda = float(row.get("preco_venda", 0.0))
-        except ValueError:
-            preco_venda = 0.0
+def listar_clientes():
+    conn = sqlite3.connect("catalogo.db")
+    df = pd.read_sql_query("SELECT * FROM clientes ORDER BY nome ASC", conn)
+    conn.close()
+    return df
 
-        permite_desc_raw = row.get("permite_desconto", 1)
+# -------------------------------------------------------------------
+# AUTENTICAÇÃO
+# -------------------------------------------------------------------
+if "autenticado" not in st.session_state:
+    st.session_state.autenticado = False
+
+if not st.session_state.autenticado:
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col2:
+        st.subheader("🔒 Acesso Restrito - Faça Login")
+        with st.form("form_login"):
+            usuario = st.text_input("Usuário")
+            senha = st.text_input("Senha", type="password")
+            btn_login = st.form_submit_button("Entrar")
+
+            if btn_login:
+                if usuario == "admin" and senha == "050391":
+                    st.session_state.autenticado = True
+                    st.session_state.pagina_atual = "📋 Catálogo de Produtos"
+                    st.rerun()
+                else:
+                    st.error("Usuário ou senha incorretos.")
+    st.stop()
+
+# -------------------------------------------------------------------
+# BARRA LATERAL (MENU PRINCIPAL)
+# -------------------------------------------------------------------
+if "pagina_atual" not in st.session_state:
+    st.session_state.pagina_atual = "📋 Catálogo de Produtos"
+
+opcoes_menu = [
+    "📋 Catálogo de Produtos", 
+    "➕ Cadastrar Produto", 
+    "✏️ Editar / Excluir Produto", 
+    "👤 Gestão de Clientes",
+    "📝 Criar Orçamento"
+]
+
+if st.session_state.pagina_atual not in opcoes_menu:
+    st.session_state.pagina_atual = "📋 Catálogo de Produtos"
+
+with st.sidebar:
+    st.markdown("### 📌 Navegação")
+
+    for opcao in opcoes_menu:
+        tipo_botao = "primary" if st.session_state.pagina_atual == opcao else "secondary"
+        if st.button(opcao, key=f"nav_{opcao}", type=tipo_botao, use_container_width=True):
+            st.session_state.pagina_atual = opcao
+            st.rerun()
+
+    st.divider()
+    if st.button("🚪 Sair (Logout)", type="secondary", use_container_width=True):
+        st.session_state.autenticado = False
+        st.rerun()
+
+menu = st.session_state.pagina_atual
+
+# -------------------------------------------------------------------
+# 1. CATÁLOGO DE PRODUTOS
+# -------------------------------------------------------------------
+if menu == "📋 Catálogo de Produtos":
+    st.header("Catálogo de Produtos")
+    df_produtos = listar_produtos()
