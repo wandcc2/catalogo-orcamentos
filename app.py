@@ -1,7 +1,7 @@
 import streamlit as st
 import os
-import sqlite3
 import pandas as pd
+from sqlalchemy import create_engine, text
 from pdf_generator import gerar_pdf_cliente, gerar_pdf_interno
 
 # Configuração da página
@@ -10,6 +10,16 @@ st.set_page_config(
     page_icon="📦",
     layout="wide"
 )
+
+# -------------------------------------------------------------------
+# CONEXÃO COM O BANCO DE DADOS EM NUVEM (SUPABASE / POSTGRESQL)
+# -------------------------------------------------------------------
+@st.cache_resource
+def get_db_engine():
+    db_url = st.secrets["postgres"]["url"]
+    return create_engine(db_url, pool_pre_ping=True)
+
+engine = get_db_engine()
 
 # -------------------------------------------------------------------
 # REGRA DE DESCONTO PROGRESSIVO
@@ -75,145 +85,96 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # -------------------------------------------------------------------
-# BANCO DE DADOS
+# BANCO DE DADOS - INICIALIZAÇÃO DAS TABELAS
 # -------------------------------------------------------------------
 UPLOADS_DIR = "uploads"
 if not os.path.exists(UPLOADS_DIR):
     os.makedirs(UPLOADS_DIR)
 
 def init_db():
-    conn = sqlite3.connect("catalogo.db")
-    c = conn.cursor()
-    
-    c.execute("CREATE TABLE IF NOT EXISTS produtos (id INTEGER PRIMARY KEY AUTOINCREMENT, nome TEXT NOT NULL, descricao TEXT, preco_custo REAL NOT NULL, preco_venda REAL NOT NULL, imagem_path TEXT, permite_desconto INTEGER DEFAULT 1)")
-    try:
-        c.execute("ALTER TABLE produtos ADD COLUMN permite_desconto INTEGER DEFAULT 1")
-    except Exception:
-        pass
-
-    c.execute("CREATE TABLE IF NOT EXISTS clientes (id INTEGER PRIMARY KEY AUTOINCREMENT, nome TEXT NOT NULL, documento TEXT, email TEXT, telefone TEXT, endereco TEXT, observacoes TEXT)")
-
-    conn.commit()
-    conn.close()
+    with engine.begin() as conn:
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS produtos (
+                id SERIAL PRIMARY KEY,
+                nome TEXT NOT NULL,
+                descricao TEXT,
+                preco_custo DOUBLE PRECISION NOT NULL,
+                preco_venda DOUBLE PRECISION NOT NULL,
+                imagem_path TEXT,
+                permite_desconto INTEGER DEFAULT 1
+            );
+        """))
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS clientes (
+                id SERIAL PRIMARY KEY,
+                nome TEXT NOT NULL,
+                documento TEXT,
+                email TEXT,
+                telefone TEXT,
+                endereco TEXT,
+                observacoes TEXT
+            );
+        """))
 
 init_db()
 
 # --- OPERAÇÕES PRODUTOS ---
 def cadastrar_produto(nome, descricao, preco_custo, preco_venda, imagem_path, permite_desconto):
-    conn = sqlite3.connect("catalogo.db")
-    c = conn.cursor()
-    c.execute("INSERT INTO produtos (nome, descricao, preco_custo, preco_venda, imagem_path, permite_desconto) VALUES (?, ?, ?, ?, ?, ?)", (nome, descricao, preco_custo, preco_venda, imagem_path, 1 if permite_desconto else 0))
-    conn.commit()
-    conn.close()
+    with engine.begin() as conn:
+        conn.execute(text("""
+            INSERT INTO produtos (nome, descricao, preco_custo, preco_venda, imagem_path, permite_desconto)
+            VALUES (:nome, :descricao, :preco_custo, :preco_venda, :imagem_path, :permite_desconto)
+        """), {
+            "nome": nome,
+            "descricao": descricao,
+            "preco_custo": preco_custo,
+            "preco_venda": preco_venda,
+            "imagem_path": imagem_path,
+            "permite_desconto": 1 if permite_desconto else 0
+        })
 
 def atualizar_produto(prod_id, nome, descricao, preco_custo, preco_venda, imagem_path, permite_desconto):
-    conn = sqlite3.connect("catalogo.db")
-    c = conn.cursor()
-    c.execute("UPDATE produtos SET nome = ?, descricao = ?, preco_custo = ?, preco_venda = ?, imagem_path = ?, permite_desconto = ? WHERE id = ?", (nome, descricao, preco_custo, preco_venda, imagem_path, 1 if permite_desconto else 0, prod_id))
-    conn.commit()
-    conn.close()
+    with engine.begin() as conn:
+        conn.execute(text("""
+            UPDATE produtos 
+            SET nome = :nome, descricao = :descricao, preco_custo = :preco_custo, 
+                preco_venda = :preco_venda, imagem_path = :imagem_path, permite_desconto = :permite_desconto
+            WHERE id = :id
+        """), {
+            "nome": nome,
+            "descricao": descricao,
+            "preco_custo": preco_custo,
+            "preco_venda": preco_venda,
+            "imagem_path": imagem_path,
+            "permite_desconto": 1 if permite_desconto else 0,
+            "id": prod_id
+        })
 
 def excluir_produto(prod_id):
-    conn = sqlite3.connect("catalogo.db")
-    c = conn.cursor()
-    c.execute("DELETE FROM produtos WHERE id = ?", (prod_id,))
-    conn.commit()
-    conn.close()
+    with engine.begin() as conn:
+        conn.execute(text("DELETE FROM produtos WHERE id = :id"), {"id": prod_id})
 
 def listar_produtos():
-    conn = sqlite3.connect("catalogo.db")
-    df = pd.read_sql_query("SELECT * FROM produtos", conn)
-    conn.close()
+    with engine.connect() as conn:
+        df = pd.read_sql(text("SELECT * FROM produtos ORDER BY id DESC"), conn)
     return df
 
 # --- OPERAÇÕES CLIENTES ---
 def cadastrar_cliente(nome, documento, email, telefone, endereco, observacoes):
-    conn = sqlite3.connect("catalogo.db")
-    c = conn.cursor()
-    c.execute("INSERT INTO clientes (nome, documento, email, telefone, endereco, observacoes) VALUES (?, ?, ?, ?, ?, ?)", (nome, documento, email, telefone, endereco, observacoes))
-    conn.commit()
-    conn.close()
+    with engine.begin() as conn:
+        conn.execute(text("""
+            INSERT INTO clientes (nome, documento, email, telefone, endereco, observacoes)
+            VALUES (:nome, :documento, :email, :telefone, :endereco, :observacoes)
+        """), {
+            "nome": nome,
+            "documento": documento,
+            "email": email,
+            "telefone": telefone,
+            "endereco": endereco,
+            "observacoes": observacoes
+        })
 
 def atualizar_cliente(cliente_id, nome, documento, email, telefone, endereco, observacoes):
-    conn = sqlite3.connect("catalogo.db")
-    c = conn.cursor()
-    c.execute("UPDATE clientes SET nome = ?, documento = ?, email = ?, telefone = ?, endereco = ? WHERE id = ?", (nome, documento, email, telefone, endereco, observacoes, cliente_id))
-    conn.commit()
-    conn.close()
-
-def excluir_cliente(cliente_id):
-    conn = sqlite3.connect("catalogo.db")
-    c = conn.cursor()
-    c.execute("DELETE FROM clientes WHERE id = ?", (cliente_id,))
-    conn.commit()
-    conn.close()
-
-def listar_clientes():
-    conn = sqlite3.connect("catalogo.db")
-    df = pd.read_sql_query("SELECT * FROM clientes ORDER BY nome ASC", conn)
-    conn.close()
-    return df
-
-# -------------------------------------------------------------------
-# AUTENTICAÇÃO
-# -------------------------------------------------------------------
-if "autenticado" not in st.session_state:
-    st.session_state.autenticado = False
-
-if not st.session_state.autenticado:
-    col1, col2, col3 = st.columns([1, 2, 1])
-    with col2:
-        st.subheader("🔒 Acesso Restrito - Faça Login")
-        with st.form("form_login"):
-            usuario = st.text_input("Usuário")
-            senha = st.text_input("Senha", type="password")
-            btn_login = st.form_submit_button("Entrar")
-
-            if btn_login:
-                if usuario == "admin" and senha == "050391":
-                    st.session_state.autenticado = True
-                    st.session_state.pagina_atual = "📋 Catálogo de Produtos"
-                    st.rerun()
-                else:
-                    st.error("Usuário ou senha incorretos.")
-    st.stop()
-
-# -------------------------------------------------------------------
-# BARRA LATERAL (MENU PRINCIPAL)
-# -------------------------------------------------------------------
-if "pagina_atual" not in st.session_state:
-    st.session_state.pagina_atual = "📋 Catálogo de Produtos"
-
-opcoes_menu = [
-    "📋 Catálogo de Produtos", 
-    "➕ Cadastrar Produto", 
-    "✏️ Editar / Excluir Produto", 
-    "👤 Gestão de Clientes",
-    "📝 Criar Orçamento"
-]
-
-if st.session_state.pagina_atual not in opcoes_menu:
-    st.session_state.pagina_atual = "📋 Catálogo de Produtos"
-
-with st.sidebar:
-    st.markdown("### 📌 Navegação")
-
-    for opcao in opcoes_menu:
-        tipo_botao = "primary" if st.session_state.pagina_atual == opcao else "secondary"
-        if st.button(opcao, key=f"nav_{opcao}", type=tipo_botao, use_container_width=True):
-            st.session_state.pagina_atual = opcao
-            st.rerun()
-
-    st.divider()
-    if st.button("🚪 Sair (Logout)", type="secondary", use_container_width=True):
-        st.session_state.autenticado = False
-        st.rerun()
-
-menu = st.session_state.pagina_atual
-
-# -------------------------------------------------------------------
-# 1. CATÁLOGO DE PRODUTOS
-# -------------------------------------------------------------------
-if menu == "📋 Catálogo de Produtos":
-    st.header("Catálogo de Produtos")
-    df_produtos = listar_produtos()
+    with engine.begin() as conn:
+        conn.execute(text("""
+            UPDATE clientes
