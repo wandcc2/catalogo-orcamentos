@@ -12,12 +12,30 @@ st.set_page_config(
 )
 
 # -------------------------------------------------------------------
-# FUNÇÃO PARA CALCULAR DESCONTO PROGRESSIVO
+# FUNÇÃO PARA CALCULAR DESCONTO PROGRESSIVO (ESCALA ATUALIZADA)
 # -------------------------------------------------------------------
 def calcular_desconto_progressivo(quantidade, preco_venda_original, permite_desconto):
-    if permite_desconto and quantidade >= 20:
+    """
+    Aplica a regra de desconto baseada na quantidade:
+    - Até 10 un: 0% (Sem Desconto)
+    - 11 a 20 un: 10%
+    - 21 a 30 un: 15%
+    - 31 a 40 un: 20%
+    - 41 a 50 un: 22%
+    - 51 ou mais un: 25%
+    """
+    if not permite_desconto:
+        return 0.0, preco_venda_original
+
+    if quantidade >= 51:
+        percentual_desconto = 0.25
+    elif quantidade >= 41:
+        percentual_desconto = 0.22
+    elif quantidade >= 31:
+        percentual_desconto = 0.20
+    elif quantidade >= 21:
         percentual_desconto = 0.15
-    elif permite_desconto and quantidade >= 11:
+    elif quantidade >= 11:
         percentual_desconto = 0.10
     else:
         percentual_desconto = 0.0
@@ -104,6 +122,7 @@ if not os.path.exists(UPLOADS_DIR):
 def init_db():
     conn = sqlite3.connect("catalogo.db")
     c = conn.cursor()
+    
     # Tabela de Produtos
     c.execute('''
         CREATE TABLE IF NOT EXISTS produtos (
@@ -255,7 +274,7 @@ if menu == "📋 Catálogo de Produtos":
         st.caption(f"Exibindo {len(df_produtos)} produto(s). Clique em um item para ver detalhes e imagem.")
 
         for _, row in df_produtos.iterrows():
-            tag_desconto = "🏷️️ Aceita Desc. Progressivo" if row.get("permite_desconto", 1) == 1 else "🚫 Sem Desc. Progressivo"
+            tag_desconto = "🏷️ Aceita Desc. Progressivo" if row.get("permite_desconto", 1) == 1 else "🚫 Sem Desc. Progressivo"
             titulo_item = f"📦 {row['nome']}  —  R$ {row['preco_venda']:.2f}  ({tag_desconto})"
             
             with st.expander(titulo_item):
@@ -379,14 +398,14 @@ elif menu == "✏️ Editar / Excluir Produto":
             st.rerun()
 
 # -------------------------------------------------------------------
-# ABA 4: GESTÃO DE CLIENTES (NOVA)
+# ABA 4: GESTÃO DE CLIENTES
 # -------------------------------------------------------------------
 elif menu == "👤 Gestão de Clientes":
     st.header("Gestão de Clientes")
     
     tab_listar, tab_cadastrar, tab_editar = st.tabs(["📋 Lista de Clientes", "➕ Cadastrar Cliente", "✏️ Editar / Excluir"])
 
-    # --- Sub-aba: Listar Clientes (Expander) ---
+    # --- Sub-aba: Listar Clientes ---
     with tab_listar:
         df_clientes = listar_clientes()
         if df_clientes.empty:
@@ -503,7 +522,7 @@ elif menu == "📝 Criar Orçamento":
             if pct_disc > 0:
                 st.info(f"🎉 Desconto Progressivo Aplicado: **{int(pct_disc*100)}% de Desconto** para {qtd} unidades!")
             else:
-                st.caption("💡 Este item possui desconto por quantidade (a partir de 11 un. ganha 10%, a partir de 20 un. ganha 15%).")
+                st.caption("💡 Este item possui desconto por quantidade (11-20 un: 10% | 21-30 un: 15% | 31-40 un: 20% | 41-50 un: 22% | 51+ un: 25%).")
         else:
             st.warning("⚠️ Este produto não possui opção de desconto por quantidade.")
 
@@ -564,7 +583,6 @@ elif menu == "📝 Criar Orçamento":
             st.divider()
             st.subheader("3. Seleção do Cliente e Gerar PDF")
 
-            # Seleção de cliente cadastrado ou opção de digitar manualmente
             df_clientes = listar_clientes()
             opcoes_clientes = ["-- Digitar Manualmente --"] + df_clientes["nome"].tolist()
             
