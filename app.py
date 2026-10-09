@@ -93,38 +93,15 @@ if not os.path.exists(UPLOADS_DIR):
 
 def init_db():
     with engine.begin() as conn:
-        conn.execute(text("""
-            CREATE TABLE IF NOT EXISTS produtos (
-                id SERIAL PRIMARY KEY,
-                nome TEXT NOT NULL,
-                descricao TEXT,
-                preco_custo DOUBLE PRECISION NOT NULL,
-                preco_venda DOUBLE PRECISION NOT NULL,
-                imagem_path TEXT,
-                permite_desconto INTEGER DEFAULT 1
-            );
-        """))
-        conn.execute(text("""
-            CREATE TABLE IF NOT EXISTS clientes (
-                id SERIAL PRIMARY KEY,
-                nome TEXT NOT NULL,
-                documento TEXT,
-                email TEXT,
-                telefone TEXT,
-                endereco TEXT,
-                observacoes TEXT
-            );
-        """))
+        conn.execute(text("CREATE TABLE IF NOT EXISTS produtos (id SERIAL PRIMARY KEY, nome TEXT NOT NULL, descricao TEXT, preco_custo DOUBLE PRECISION NOT NULL, preco_venda DOUBLE PRECISION NOT NULL, imagem_path TEXT, permite_desconto INTEGER DEFAULT 1);"))
+        conn.execute(text("CREATE TABLE IF NOT EXISTS clientes (id SERIAL PRIMARY KEY, nome TEXT NOT NULL, documento TEXT, email TEXT, telefone TEXT, endereco TEXT, observacoes TEXT);"))
 
 init_db()
 
 # --- OPERAÇÕES PRODUTOS ---
 def cadastrar_produto(nome, descricao, preco_custo, preco_venda, imagem_path, permite_desconto):
     with engine.begin() as conn:
-        conn.execute(text("""
-            INSERT INTO produtos (nome, descricao, preco_custo, preco_venda, imagem_path, permite_desconto)
-            VALUES (:nome, :descricao, :preco_custo, :preco_venda, :imagem_path, :permite_desconto)
-        """), {
+        conn.execute(text("INSERT INTO produtos (nome, descricao, preco_custo, preco_venda, imagem_path, permite_desconto) VALUES (:nome, :descricao, :preco_custo, :preco_venda, :imagem_path, :permite_desconto)"), {
             "nome": nome,
             "descricao": descricao,
             "preco_custo": preco_custo,
@@ -135,12 +112,7 @@ def cadastrar_produto(nome, descricao, preco_custo, preco_venda, imagem_path, pe
 
 def atualizar_produto(prod_id, nome, descricao, preco_custo, preco_venda, imagem_path, permite_desconto):
     with engine.begin() as conn:
-        conn.execute(text("""
-            UPDATE produtos 
-            SET nome = :nome, descricao = :descricao, preco_custo = :preco_custo, 
-                preco_venda = :preco_venda, imagem_path = :imagem_path, permite_desconto = :permite_desconto
-            WHERE id = :id
-        """), {
+        conn.execute(text("UPDATE produtos SET nome = :nome, descricao = :descricao, preco_custo = :preco_custo, preco_venda = :preco_venda, imagem_path = :imagem_path, permite_desconto = :permite_desconto WHERE id = :id"), {
             "nome": nome,
             "descricao": descricao,
             "preco_custo": preco_custo,
@@ -162,10 +134,7 @@ def listar_produtos():
 # --- OPERAÇÕES CLIENTES ---
 def cadastrar_cliente(nome, documento, email, telefone, endereco, observacoes):
     with engine.begin() as conn:
-        conn.execute(text("""
-            INSERT INTO clientes (nome, documento, email, telefone, endereco, observacoes)
-            VALUES (:nome, :documento, :email, :telefone, :endereco, :observacoes)
-        """), {
+        conn.execute(text("INSERT INTO clientes (nome, documento, email, telefone, endereco, observacoes) VALUES (:nome, :documento, :email, :telefone, :endereco, :observacoes)"), {
             "nome": nome,
             "documento": documento,
             "email": email,
@@ -176,5 +145,44 @@ def cadastrar_cliente(nome, documento, email, telefone, endereco, observacoes):
 
 def atualizar_cliente(cliente_id, nome, documento, email, telefone, endereco, observacoes):
     with engine.begin() as conn:
-        conn.execute(text("""
-            UPDATE clientes
+        conn.execute(text("UPDATE clientes SET nome = :nome, documento = :documento, email = :email, telefone = :telefone, endereco = :endereco, observacoes = :observacoes WHERE id = :id"), {
+            "nome": nome,
+            "documento": documento,
+            "email": email,
+            "telefone": telefone,
+            "endereco": endereco,
+            "observacoes": observacoes,
+            "id": cliente_id
+        })
+
+def excluir_cliente(cliente_id):
+    with engine.begin() as conn:
+        conn.execute(text("DELETE FROM clientes WHERE id = :id"), {"id": cliente_id})
+
+def listar_clientes():
+    with engine.connect() as conn:
+        df = pd.read_sql(text("SELECT * FROM clientes ORDER BY nome ASC"), conn)
+    return df
+
+# -------------------------------------------------------------------
+# AUTENTICAÇÃO
+# -------------------------------------------------------------------
+if "autenticado" not in st.session_state:
+    st.session_state.autenticado = False
+
+if not st.session_state.autenticado:
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col2:
+        st.subheader("🔒 Acesso Restrito - Faça Login")
+        with st.form("form_login"):
+            usuario = st.text_input("Usuário")
+            senha = st.text_input("Senha", type="password")
+            btn_login = st.form_submit_button("Entrar")
+
+            if btn_login:
+                if usuario == "admin" and senha == "050391":
+                    st.session_state.autenticado = True
+                    st.session_state.pagina_atual = "📋 Catálogo de Produtos"
+                    st.rerun()
+                else:
+                    st.error("Usuário
