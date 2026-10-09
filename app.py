@@ -12,7 +12,7 @@ st.set_page_config(
 )
 
 # -------------------------------------------------------------------
-# FUNÇÃO PARA CALCULAR DESCONTO PROGRESSIVO (CORRIGIDA)
+# FUNÇÃO PARA CALCULAR DESCONTO PROGRESSIVO
 # -------------------------------------------------------------------
 def calcular_desconto_progressivo(quantidade, preco_venda_original, permite_desconto):
     """
@@ -224,4 +224,26 @@ def excluir_cliente(cliente_id):
 
 def listar_clientes():
     conn = sqlite3.connect("catalogo.db")
-    df = pd.read_sql_query("SELECT *
+    df = pd.read_sql_query("SELECT * FROM clientes ORDER BY nome ASC", conn)
+    conn.close()
+    return df
+
+# -------------------------------------------------------------------
+# BARRA LATERAL
+# -------------------------------------------------------------------
+if "pagina_atual" not in st.session_state:
+    st.session_state.pagina_atual = "📋 Catálogo de Produtos"
+
+with st.sidebar:
+    st.markdown("### 📌 Navegação")
+    opcoes = [
+        "📋 Catálogo de Produtos", 
+        "➕ Cadastrar Produto", 
+        "✏️ Editar / Excluir Produto", 
+        "👤 Gestão de Clientes",
+        "📝 Criar Orçamento"
+    ]
+
+    for opcao in opcoes:
+        tipo_botao = "primary" if st.session_state.pagina_atual == opcao else "secondary"
+        if st.button(opcao, key=f"nav_{opcao}", type=tipo_botao
