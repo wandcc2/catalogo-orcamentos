@@ -1,6 +1,6 @@
-import streamlit as st
 import os
 import pandas as pd
+import streamlit as st
 from sqlalchemy import create_engine, text
 from pdf_generator import gerar_pdf_cliente, gerar_pdf_interno
 
@@ -391,4 +391,50 @@ elif menu == "Criar Orcamento":
     if df_p.empty:
         st.warning("Cadastre produtos antes de criar um orçamento.")
     else:
-        if "carrinho" not
+        if "carrinho" not in st.session_state:
+            st.session_state.carrinho = []
+
+        prod_sel = st.selectbox("Escolha o produto:", df_p["nome"].tolist())
+        qtd = st.number_input("Quantidade", min_value=1, value=1, step=1)
+        item_dados = df_p[df_p["nome"] == prod_sel].iloc[0].to_dict()
+        permite_desc = bool(item_dados.get("permite_desconto", 1))
+
+        pct_d, _ = calcular_desconto(qtd, 1.0, permite_desc)
+        if permite_desc and pct_d > 0:
+            st.info(f"Desconto aplicado: **{int(pct_d * 100)}%**")
+
+        if st.button("Adicionar ao Orçamento"):
+            pct, preco_desc = calcular_desconto(qtd, item_dados["preco_venda"], permite_desc)
+            item_dados["quantidade"] = qtd
+            item_dados["preco_venda_original"] = item_dados["preco_venda"]
+            item_dados["preco_venda"] = preco_desc
+            item_dados["desconto_aplicado"] = f"{int(pct * 100)}%" if permite_desc else "N/A"
+            st.session_state.carrinho.append(item_dados)
+            st.success("Adicionado!")
+
+        if st.session_state.carrinho:
+            df_cart = pd.DataFrame(st.session_state.carrinho)
+            df_cart["Subtotal"] = df_cart["preco_venda"] * df_cart["quantidade"]
+            st.dataframe(df_cart[["nome", "quantidade", "preco_venda", "Subtotal"]], use_container_width=True)
+
+            if st.button("Limpar Orçamento"):
+                st.session_state.carrinho = []
+                st.rerun()
+
+            st.divider()
+            df_c = listar_clientes()
+            op_c_orc = ["-- Digitar Manualmente --"] + (df_c["nome"].tolist() if not df_c.empty else [])
+            cli_sel_op = st.selectbox("Cliente:", op_c_orc)
+            nome_cli_final = st.text_input("Nome do Cliente", value="Cliente") if cli_sel_op == "-- Digitar Manualmente --" else cli_sel_op
+
+            p1, p2 = st.columns(2)
+            with p1:
+                if st.button("Gerar Orçamento PDF"):
+                    pdf_p = gerar_pdf_cliente(st.session_state.carrinho, "orcamento.pdf", nome_cli_final)
+                    with open(pdf_p, "rb") as f:
+                        st.download_button("Baixar PDF Cliente", f, file_name="Orcamento.pdf", mime="application/pdf")
+            with p2:
+                if st.button("Gerar Relatório Interno PDF"):
+                    pdf_pi = gerar_pdf_interno(st.session_state.carrinho, "relatorio.pdf")
+                    with open(pdf_pi, "rb") as f:
+                        st.download_button("Baixar Relatório Interno", f, file_name="Relatorio.pdf", mime="application/pdf")
