@@ -1,7 +1,7 @@
 import streamlit as st
 import os
-import sqlite3
 import pandas as pd
+from sqlalchemy import create_engine, text
 from pdf_generator import gerar_pdf_cliente, gerar_pdf_interno
 
 # Configuração da página
@@ -113,119 +113,114 @@ if not verificar_login():
     st.stop()
 
 # -------------------------------------------------------------------
-# BANCO DE DADOS
+# CONEXÃO COM O BANCO DE DADOS EM NUVEM (SUPABASE / POSTGRESQL)
 # -------------------------------------------------------------------
+@st.cache_resource
+def get_db_engine():
+    db_url = st.secrets["postgres"]["url"]
+    if db_url.startswith("postgres://"):
+        db_url = db_url.replace("postgres://", "postgresql+psycopg2://", 1)
+    elif db_url.startswith("postgresql://"):
+        db_url = db_url.replace("postgresql://", "postgresql+psycopg2://", 1)
+    return create_engine(db_url, pool_pre_ping=True)
+
+engine = get_db_engine()
+
 UPLOADS_DIR = "uploads"
 if not os.path.exists(UPLOADS_DIR):
     os.makedirs(UPLOADS_DIR)
 
 def init_db():
-    conn = sqlite3.connect("catalogo.db")
-    c = conn.cursor()
-    
-    # Tabela de Produtos
-    c.execute('''
-        CREATE TABLE IF NOT EXISTS produtos (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            nome TEXT NOT NULL,
-            descricao TEXT,
-            preco_custo REAL NOT NULL,
-            preco_venda REAL NOT NULL,
-            imagem_path TEXT,
-            permite_desconto INTEGER DEFAULT 1
-        )
-    ''')
-    try:
-        c.execute('ALTER TABLE produtos ADD COLUMN permite_desconto INTEGER DEFAULT 1')
-    except Exception:
-        pass
-
-    # Tabela de Clientes
-    c.execute('''
-        CREATE TABLE IF NOT EXISTS clientes (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            nome TEXT NOT NULL,
-            documento TEXT,
-            email TEXT,
-            telefone TEXT,
-            endereco TEXT,
-            observacoes TEXT
-        )
-    ''')
-
-    conn.commit()
-    conn.close()
+    with engine.begin() as conn:
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS produtos (
+                id SERIAL PRIMARY KEY,
+                nome TEXT NOT NULL,
+                descricao TEXT,
+                preco_custo DOUBLE PRECISION NOT NULL,
+                preco_venda DOUBLE PRECISION NOT NULL,
+                imagem_path TEXT,
+                permite_desconto INTEGER DEFAULT 1
+            );
+        """))
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS clientes (
+                id SERIAL PRIMARY KEY,
+                nome TEXT NOT NULL,
+                documento TEXT,
+                email TEXT,
+                telefone TEXT,
+                endereco TEXT,
+                observacoes TEXT
+            );
+        """))
 
 init_db()
 
 # --- FUNÇÕES PRODUTOS ---
 def cadastrar_produto(nome, descricao, preco_custo, preco_venda, imagem_path, permite_desconto):
-    conn = sqlite3.connect("catalogo.db")
-    c = conn.cursor()
-    c.execute('''
-        INSERT INTO produtos (nome, descricao, preco_custo, preco_venda, imagem_path, permite_desconto)
-        VALUES (?, ?, ?, ?, ?, ?)
-    ''', (nome, descricao, preco_custo, preco_venda, imagem_path, 1 if permite_desconto else 0))
-    conn.commit()
-    conn.close()
+    with engine.begin() as conn:
+        conn.execute(text("""
+            INSERT INTO produtos (nome, descricao, preco_custo, preco_venda, imagem_path, permite_desconto)
+            VALUES (:nome, :descricao, :custo, :venda, :img, :permite)
+        """), {
+            "nome": nome, "descricao": descricao, "custo": preco_custo,
+            "venda": preco_venda, "img": imagem_path, "permite": 1 if permite_desconto else 0
+        })
 
 def atualizar_produto(prod_id, nome, descricao, preco_custo, preco_venda, imagem_path, permite_desconto):
-    conn = sqlite3.connect("catalogo.db")
-    c = conn.cursor()
-    c.execute('''
-        UPDATE produtos 
-        SET nome = ?, descricao = ?, preco_custo = ?, preco_venda = ?, imagem_path = ?, permite_desconto = ?
-        WHERE id = ?
-    ''', (nome, descricao, preco_custo, preco_venda, imagem_path, 1 if permite_desconto else 0, prod_id))
-    conn.commit()
-    conn.close()
+    with engine.begin() as conn:
+        conn.execute(text("""
+            UPDATE produtos 
+            SET nome = :nome, descricao = :descricao, preco_custo = :custo, 
+                preco_venda = :venda, imagem_path = :img, permite_desconto = :permite
+            WHERE id = :id
+        """), {
+            "nome": nome, "descricao": descricao, "custo": preco_custo,
+            "venda": preco_venda, "img": imagem_path, 
+            "permite": 1 if permite_desconto else 0, "id": prod_id
+        })
 
 def excluir_produto(prod_id):
-    conn = sqlite3.connect("catalogo.db")
-    c = conn.cursor()
-    c.execute('DELETE FROM produtos WHERE id = ?', (prod_id,))
-    conn.commit()
-    conn.close()
+    with engine.begin() as conn:
+        conn.execute(text("DELETE FROM produtos WHERE id = :id"), {"id": prod_id})
 
 def listar_produtos():
-    conn = sqlite3.connect("catalogo.db")
-    df = pd.read_sql_query("SELECT * FROM produtos", conn)
-    conn.close()
+    with engine.connect() as conn:
+        df = pd.read_sql(text("SELECT * FROM produtos ORDER BY id DESC"), conn)
     return df
 
 # --- FUNÇÕES CLIENTES ---
 def cadastrar_cliente(nome, documento, email, telefone, endereco, observacoes):
-    conn = sqlite3.connect("catalogo.db")
-    c = conn.cursor()
-    c.execute('''
-        INSERT INTO clientes (nome, documento, email, telefone, endereco, observacoes)
-        VALUES (?, ?, ?, ?, ?, ?)
-    ''', (nome, documento, email, telefone, endereco, observacoes))
-    conn.commit()
-    conn.close()
+    with engine.begin() as conn:
+        conn.execute(text("""
+            INSERT INTO clientes (nome, documento, email, telefone, endereco, observacoes)
+            VALUES (:nome, :doc, :email, :tel, :end, :obs)
+        """), {
+            "nome": nome, "doc": documento, "email": email,
+            "tel": telefone, "end": endereco, "obs": observacoes
+        })
 
 def atualizar_cliente(cliente_id, nome, documento, email, telefone, endereco, observacoes):
-    conn = sqlite3.connect("catalogo.db")
-    c = conn.cursor()
-    c.execute('''
-        UPDATE clientes 
-        SET nome = ?, documento = ?, email = ?, telefone = ?, endereco = ?, observacoes = ?
-        WHERE id = ?
-    ''', (nome, documento, email, telefone, endereco, observacoes, cliente_id))
-    conn.commit()
-    conn.close()
+    with engine.begin() as conn:
+        conn.execute(text("""
+            UPDATE clientes 
+            SET nome = :nome, documento = :doc, email = :email, 
+                telefone = :tel, endereco = :end, observacoes = :obs
+            WHERE id = :id
+        """), {
+            "nome": nome, "doc": documento, "email": email,
+            "tel": telefone, "end": endereco, "obs": observacoes,
+            "id": cliente_id
+        })
 
 def excluir_cliente(cliente_id):
-    conn = sqlite3.connect("catalogo.db")
-    c = conn.cursor()
-    c.execute('DELETE FROM clientes WHERE id = ?', (cliente_id,))
-    conn.commit()
-    conn.close()
+    with engine.begin() as conn:
+        conn.execute(text("DELETE FROM clientes WHERE id = :id"), {"id": cliente_id})
 
 def listar_clientes():
-    conn = sqlite3.connect("catalogo.db")
-    df = pd.read_sql_query("SELECT * FROM clientes ORDER BY nome ASC", conn)
-    conn.close()
+    with engine.connect() as conn:
+        df = pd.read_sql(text("SELECT * FROM clientes ORDER BY nome ASC"), conn)
     return df
 
 # -------------------------------------------------------------------
@@ -347,266 +342,4 @@ elif menu == "✏️ Editar / Excluir Produto":
 
         with col_img:
             st.subheader("Imagem Atual")
-            if produto_atual["imagem_path"] and os.path.exists(produto_atual["imagem_path"]):
-                st.image(produto_atual["imagem_path"], use_container_width=True)
-            else:
-                st.caption("Sem imagem cadastrada.")
-
-        with col_edit:
-            with st.form("form_editar_produto"):
-                novo_nome = st.text_input("Nome do Produto", value=produto_atual["nome"])
-                nova_descricao = st.text_area("Descrição", value=produto_atual["descricao"] or "")
-                
-                c1, c2 = st.columns(2)
-                with c1:
-                    novo_custo = st.number_input("Preço de Custo (R$)", value=float(produto_atual["preco_custo"]), min_value=0.0, format="%.2f")
-                with c2:
-                    novo_venda = st.number_input("Preço de Venda (R$)", value=float(produto_atual["preco_venda"]), min_value=0.0, format="%.2f")
-
-                novo_permite_desconto = st.checkbox(
-                    "Permitir Desconto Progressivo por Quantidade para este item",
-                    value=bool(produto_atual.get("permite_desconto", 1))
-                )
-
-                nova_foto = st.file_uploader("Substituir Imagem (Deixe vazio para manter a atual)", type=["png", "jpg", "jpeg"])
-                btn_atualizar = st.form_submit_button("💾 Salvar Alterações")
-
-                if btn_atualizar:
-                    caminho_imagem = produto_atual["imagem_path"]
-                    if nova_foto is not None:
-                        caminho_imagem = os.path.join(UPLOADS_DIR, nova_foto.name)
-                        with open(caminho_imagem, "wb") as f:
-                            f.write(nova_foto.getbuffer())
-
-                    atualizar_produto(
-                        produto_atual["id"], 
-                        novo_nome, 
-                        nova_descricao, 
-                        novo_custo, 
-                        novo_venda, 
-                        caminho_imagem, 
-                        novo_permite_desconto
-                    )
-                    st.success("Produto atualizado com sucesso!")
-                    st.rerun()
-
-        st.divider()
-        st.subheader("⚠️ Zona de Perigo")
-        if st.button("🗑 Excluir Produto do Catálogo", type="primary"):
-            excluir_produto(produto_atual["id"])
-            st.success(f"Produto '{produto_atual['nome']}' foi excluído.")
-            st.rerun()
-
-# -------------------------------------------------------------------
-# ABA 4: GESTÃO DE CLIENTES
-# -------------------------------------------------------------------
-elif menu == "👤 Gestão de Clientes":
-    st.header("Gestão de Clientes")
-    
-    tab_listar, tab_cadastrar, tab_editar = st.tabs(["📋 Lista de Clientes", "➕ Cadastrar Cliente", "✏️ Editar / Excluir"])
-
-    # --- Sub-aba: Listar Clientes ---
-    with tab_listar:
-        df_clientes = listar_clientes()
-        if df_clientes.empty:
-            st.info("Nenhum cliente cadastrado ainda.")
-        else:
-            busca_cli = st.text_input("🔍 Buscar cliente por nome ou documento...", "")
-            if busca_cli:
-                df_clientes = df_clientes[
-                    df_clientes["nome"].str.contains(busca_cli, case=False, na=False) |
-                    df_clientes["documento"].str.contains(busca_cli, case=False, na=False)
-                ]
-
-            st.caption(f"Exibindo {len(df_clientes)} cliente(s). Clique no nome para expandir as informações.")
-
-            for _, cli in df_clientes.iterrows():
-                doc_text = f" | Doc: {cli['documento']}" if cli['documento'] else ""
-                tel_text = f" | Tel: {cli['telefone']}" if cli['telefone'] else ""
-                titulo_cliente = f"👤 {cli['nome']}{doc_text}{tel_text}"
-
-                with st.expander(titulo_cliente):
-                    c1, c2 = st.columns(2)
-                    with c1:
-                        st.write(f"**Nome / Razão Social:** {cli['nome']}")
-                        st.write(f"**CPF / CNPJ:** {cli['documento'] or 'Não informado'}")
-                        st.write(f"**E-mail:** {cli['email'] or 'Não informado'}")
-                    with c2:
-                        st.write(f"**Telefone / WhatsApp:** {cli['telefone'] or 'Não informado'}")
-                        st.write(f"**Endereço:** {cli['endereco'] or 'Não informado'}")
-                    
-                    st.write(f"**Observações:** {cli['observacoes'] or 'Sem observações'}")
-
-    # --- Sub-aba: Cadastrar Cliente ---
-    with tab_cadastrar:
-        st.subheader("Novo Cadastro de Cliente")
-        with st.form("form_cadastrar_cliente", clear_on_submit=True):
-            nome_cli = st.text_input("Nome / Razão Social *")
-            col_c1, col_c2 = st.columns(2)
-            with col_c1:
-                doc_cli = st.text_input("CPF / CNPJ")
-                email_cli = st.text_input("E-mail")
-            with col_c2:
-                tel_cli = st.text_input("Telefone / WhatsApp")
-                end_cli = st.text_input("Endereço Completo")
-
-            obs_cli = st.text_area("Observações Internas")
-            btn_salvar_cli = st.form_submit_button("💾 Cadastrar Cliente")
-
-            if btn_salvar_cli:
-                if not nome_cli:
-                    st.error("O nome do cliente é obrigatório.")
-                else:
-                    cadastrar_cliente(nome_cli, doc_cli, email_cli, tel_cli, end_cli, obs_cli)
-                    st.success(f"Cliente '{nome_cli}' cadastrado com sucesso!")
-                    st.rerun()
-
-    # --- Sub-aba: Editar / Excluir Cliente ---
-    with tab_editar:
-        df_clientes = listar_clientes()
-        if df_clientes.empty:
-            st.info("Nenhum cliente cadastrado para edição.")
-        else:
-            opcoes_cli = {f"{cli['id']} - {cli['nome']}": cli for _, cli in df_clientes.iterrows()}
-            cli_sel_str = st.selectbox("Selecione o cliente que deseja alterar:", list(opcoes_cli.keys()))
-            cli_atual = opcoes_cli[cli_sel_str]
-
-            with st.form("form_editar_cliente"):
-                ed_nome = st.text_input("Nome / Razão Social", value=cli_atual["nome"])
-                col_e1, col_e2 = st.columns(2)
-                with col_e1:
-                    ed_doc = st.text_input("CPF / CNPJ", value=cli_atual["documento"] or "")
-                    ed_email = st.text_input("E-mail", value=cli_atual["email"] or "")
-                with col_e2:
-                    ed_tel = st.text_input("Telefone / WhatsApp", value=cli_atual["telefone"] or "")
-                    ed_end = st.text_input("Endereço Completo", value=cli_atual["endereco"] or "")
-
-                ed_obs = st.text_area("Observações Internas", value=cli_atual["observacoes"] or "")
-                btn_up_cli = st.form_submit_button("💾 Salvar Alterações")
-
-                if btn_up_cli:
-                    atualizar_cliente(cli_atual["id"], ed_nome, ed_doc, ed_email, ed_tel, ed_end, ed_obs)
-                    st.success("Dados do cliente atualizados com sucesso!")
-                    st.rerun()
-
-            st.divider()
-            if st.button("🗑 Excluir Cliente", type="primary"):
-                excluir_cliente(cli_atual["id"])
-                st.success(f"Cliente '{cli_atual['nome']}' foi excluído.")
-                st.rerun()
-
-# -------------------------------------------------------------------
-# ABA 5: CRIAR ORÇAMENTO
-# -------------------------------------------------------------------
-elif menu == "📝 Criar Orçamento":
-    st.header("Montar Orçamento")
-    
-    df_produtos = listar_produtos()
-
-    if df_produtos.empty:
-        st.warning("Cadastre produtos antes de criar um orçamento.")
-    else:
-        st.subheader("1. Seleção de Itens")
-        
-        if "carrinho" not in st.session_state:
-            st.session_state.carrinho = []
-
-        produto_selecionado_nome = st.selectbox("Escolha um produto", df_produtos["nome"].tolist())
-        qtd = st.number_input("Quantidade de Peças", min_value=1, value=1, step=1)
-
-        item_dados = df_produtos[df_produtos["nome"] == produto_selecionado_nome].iloc[0].to_dict()
-        permite_desc = bool(item_dados.get("permite_desconto", 1))
-
-        pct_disc, _ = calcular_desconto_progressivo(qtd, 1.0, permite_desc)
-        if permite_desc:
-            if pct_disc > 0:
-                st.info(f"🎉 Desconto Progressivo Aplicado: **{int(pct_disc*100)}% de Desconto** para {qtd} unidades!")
-            else:
-                st.caption("💡 Este item possui desconto por quantidade (11-20 un: 10% | 21-30 un: 15% | 31-40 un: 20% | 41-50 un: 22% | 51+ un: 25%).")
-        else:
-            st.warning("⚠️ Este produto não possui opção de desconto por quantidade.")
-
-        if st.button("Adicionar ao Orçamento"):
-            pct_desconto, preco_venda_com_desconto = calcular_desconto_progressivo(
-                qtd, 
-                item_dados["preco_venda"], 
-                permite_desc
-            )
-            
-            item_dados["quantidade"] = qtd
-            item_dados["preco_venda_original"] = item_dados["preco_venda"]
-            item_dados["preco_venda"] = preco_venda_com_desconto
-            item_dados["desconto_aplicado"] = f"{int(pct_desconto * 100)}%" if permite_desc else "N/A"
-            
-            st.session_state.carrinho.append(item_dados)
-            st.success(f"{qtd}x '{produto_selecionado_nome}' adicionado!")
-
-        if st.session_state.carrinho:
-            st.subheader("2. Itens no Orçamento Atual")
-            
-            df_cart = pd.DataFrame(st.session_state.carrinho)
-            df_cart["Subtotal Custo"] = df_cart["preco_custo"] * df_cart["quantidade"]
-            df_cart["Subtotal Venda"] = df_cart["preco_venda"] * df_cart["quantidade"]
-
-            df_exibicao = df_cart[["nome", "quantidade", "preco_venda_original", "desconto_aplicado", "preco_venda", "Subtotal Venda"]].rename(
-                columns={
-                    "nome": "Produto",
-                    "quantidade": "Qtd",
-                    "preco_venda_original": "Preço Tabela (R$)",
-                    "desconto_aplicado": "Desconto",
-                    "preco_venda": "Preço c/ Desc. (R$)",
-                    "Subtotal Venda": "Subtotal (R$)"
-                }
-            )
-
-            st.dataframe(df_exibicao, use_container_width=True)
-
-            total_custo = df_cart["Subtotal Custo"].sum()
-            total_venda = df_cart["Subtotal Venda"].sum()
-            lucro_estimado = total_venda - total_custo
-
-            col_a, col_b, col_c = st.columns(3)
-            col_a.metric("Total Custo (Interno)", f"R$ {total_custo:.2f}")
-            col_b.metric("Total Venda (Cliente)", f"R$ {total_venda:.2f}")
-            col_c.metric("Lucro Bruto", f"R$ {lucro_estimado:.2f}")
-
-            if st.button("Limpar Orçamento"):
-                st.session_state.carrinho = []
-                st.rerun()
-
-            st.divider()
-            st.subheader("3. Seleção do Cliente e Gerar PDF")
-
-            df_clientes = listar_clientes()
-            opcoes_clientes = ["-- Digitar Manualmente --"] + df_clientes["nome"].tolist()
-            
-            cliente_selecionado_opcao = st.selectbox("Selecione o Cliente Cadastrado:", opcoes_clientes)
-
-            if cliente_selecionado_opcao == "-- Digitar Manualmente --":
-                nome_cliente_final = st.text_input("Nome do Cliente (Manual)", value="Cliente")
-            else:
-                nome_cliente_final = cliente_selecionado_opcao
-
-            col_pdf1, col_pdf2 = st.columns(2)
-
-            with col_pdf1:
-                if st.button("📄 Gerar Orçamento do Cliente (PDF)"):
-                    pdf_path = gerar_pdf_cliente(st.session_state.carrinho, "orcamento_cliente.pdf", nome_cliente_final)
-                    with open(pdf_path, "rb") as f:
-                        st.download_button(
-                            label="📥 Baixar Orçamento do Cliente",
-                            data=f,
-                            file_name=f"Orcamento_{nome_cliente_final.replace(' ', '_')}.pdf",
-                            mime="application/pdf"
-                        )
-
-            with col_pdf2:
-                if st.button("📊 Gerar Relatório de Custo Interno (PDF)"):
-                    pdf_path_interno = gerar_pdf_interno(st.session_state.carrinho, "relatorio_custos_interno.pdf")
-                    with open(pdf_path_interno, "rb") as f:
-                        st.download_button(
-                            label="📥 Baixar Relatório Interno (Custos)",
-                            data=f,
-                            file_name="Relatorio_Interno_Custos.pdf",
-                            mime="application/pdf"
-                        )
+            if produto_atual["imagem_path"] and os
