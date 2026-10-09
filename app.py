@@ -173,7 +173,7 @@ if "autenticado" not in st.session_state:
 if not st.session_state.autenticado:
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
-        st.subheader("🔒 Acesso Restrito - Faça Login")
+        st.subheader("🔒 Acesso Restrito")
         with st.form("form_login"):
             usuario = st.text_input("Usuário")
             senha = st.text_input("Senha", type="password")
@@ -185,4 +185,34 @@ if not st.session_state.autenticado:
                     st.session_state.pagina_atual = "📋 Catálogo de Produtos"
                     st.rerun()
                 else:
-                    st.error("Usuário
+                    st.error("Usuário/Senha incorretos.")
+    st.stop()
+
+# -------------------------------------------------------------------
+# BARRA LATERAL (MENU PRINCIPAL)
+# -------------------------------------------------------------------
+if "pagina_atual" not in st.session_state:
+    st.session_state.pagina_atual = "📋 Catálogo de Produtos"
+
+opcoes_menu = [
+    "📋 Catálogo de Produtos", 
+    "➕ Cadastrar Produto", 
+    "✏️ Editar / Excluir Produto", 
+    "👤 Gestão de Clientes",
+    "📝 Criar Orçamento"
+]
+
+if st.session_state.pagina_atual not in opcoes_menu:
+    st.session_state.pagina_atual = "📋 Catálogo de Produtos"
+
+with st.sidebar:
+    st.markdown("### 📌 Navegação")
+
+    for opcao in opcoes_menu:
+        tipo_botao = "primary" if st.session_state.pagina_atual == opcao else "secondary"
+        if st.button(opcao, key=f"nav_{opcao}", type=tipo_botao, use_container_width=True):
+            st.session_state.pagina_atual = opcao
+            st.rerun()
+
+    st.divider()
+    if st.button("🚪 Sair (
