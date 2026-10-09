@@ -280,7 +280,6 @@ with st.sidebar:
         "📋 Catálogo de Produtos", 
         "➕ Cadastrar Produto", 
         "✏️ Editar / Excluir Produto", 
-        "📊 Importar / Exportar Excel",
         "👤 Gestão de Clientes",
         "📝 Criar Orçamento"
     ]
@@ -298,22 +297,4 @@ with st.sidebar:
 
 menu = st.session_state.pagina_atual
 
-# -------------------------------------------------------------------
-# ABA 1: CATÁLOGO DE PRODUTOS
-# -------------------------------------------------------------------
-if menu == "📋 Catálogo de Produtos":
-    st.header("Catálogo de Produtos")
-    df_produtos = listar_produtos()
-
-    if df_produtos.empty:
-        st.info("Nenhum produto cadastrado ainda.")
-    else:
-        busca = st.text_input("🔍 Buscar produto por nome...", "")
-        if busca:
-            df_produtos = df_produtos[df_produtos["nome"].str.contains(busca, case=False, na=False)]
-
-        st.caption(f"Exibindo {len(df_produtos)} produto(s). Clique em um item para ver detalhes e imagem.")
-
-        for _, row in df_produtos.iterrows():
-            tag_desconto = "🏷️ Aceita Desc. Progressivo" if row.get("permite_desconto", 1) == 1 else "🚫 Sem Desc. Progressivo"
-            titulo_item = f
+#
