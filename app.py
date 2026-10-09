@@ -86,33 +86,13 @@ def init_db():
     conn = sqlite3.connect("catalogo.db")
     c = conn.cursor()
     
-    c.execute('''
-        CREATE TABLE IF NOT EXISTS produtos (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            nome TEXT NOT NULL,
-            descricao TEXT,
-            preco_custo REAL NOT NULL,
-            preco_venda REAL NOT NULL,
-            imagem_path TEXT,
-            permite_desconto INTEGER DEFAULT 1
-        )
-    ''')
+    c.execute("CREATE TABLE IF NOT EXISTS produtos (id INTEGER PRIMARY KEY AUTOINCREMENT, nome TEXT NOT NULL, descricao TEXT, preco_custo REAL NOT NULL, preco_venda REAL NOT NULL, imagem_path TEXT, permite_desconto INTEGER DEFAULT 1)")
     try:
-        c.execute('ALTER TABLE produtos ADD COLUMN permite_desconto INTEGER DEFAULT 1')
+        c.execute("ALTER TABLE produtos ADD COLUMN permite_desconto INTEGER DEFAULT 1")
     except Exception:
         pass
 
-    c.execute('''
-        CREATE TABLE IF NOT EXISTS clientes (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            nome TEXT NOT NULL,
-            documento TEXT,
-            email TEXT,
-            telefone TEXT,
-            endereco TEXT,
-            observacoes TEXT
-        )
-    ''')
+    c.execute("CREATE TABLE IF NOT EXISTS clientes (id INTEGER PRIMARY KEY AUTOINCREMENT, nome TEXT NOT NULL, documento TEXT, email TEXT, telefone TEXT, endereco TEXT, observacoes TEXT)")
 
     conn.commit()
     conn.close()
@@ -123,28 +103,21 @@ init_db()
 def cadastrar_produto(nome, descricao, preco_custo, preco_venda, imagem_path, permite_desconto):
     conn = sqlite3.connect("catalogo.db")
     c = conn.cursor()
-    c.execute('''
-        INSERT INTO produtos (nome, descricao, preco_custo, preco_venda, imagem_path, permite_desconto)
-        VALUES (?, ?, ?, ?, ?, ?)
-    ''', (nome, descricao, preco_custo, preco_venda, imagem_path, 1 if permite_desconto else 0))
+    c.execute("INSERT INTO produtos (nome, descricao, preco_custo, preco_venda, imagem_path, permite_desconto) VALUES (?, ?, ?, ?, ?, ?)", (nome, descricao, preco_custo, preco_venda, imagem_path, 1 if permite_desconto else 0))
     conn.commit()
     conn.close()
 
 def atualizar_produto(prod_id, nome, descricao, preco_custo, preco_venda, imagem_path, permite_desconto):
     conn = sqlite3.connect("catalogo.db")
     c = conn.cursor()
-    c.execute('''
-        UPDATE produtos 
-        SET nome = ?, descricao = ?, preco_custo = ?, preco_venda = ?, imagem_path = ?, permite_desconto = ?
-        WHERE id = ?
-    ''', (nome, descricao, preco_custo, preco_venda, imagem_path, 1 if permite_desconto else 0, prod_id))
+    c.execute("UPDATE produtos SET nome = ?, descricao = ?, preco_custo = ?, preco_venda = ?, imagem_path = ?, permite_desconto = ? WHERE id = ?", (nome, descricao, preco_custo, preco_venda, imagem_path, 1 if permite_desconto else 0, prod_id))
     conn.commit()
     conn.close()
 
 def excluir_produto(prod_id):
     conn = sqlite3.connect("catalogo.db")
     c = conn.cursor()
-    c.execute('DELETE FROM produtos WHERE id = ?', (prod_id,))
+    c.execute("DELETE FROM produtos WHERE id = ?", (prod_id,))
     conn.commit()
     conn.close()
 
@@ -177,36 +150,3 @@ def importar_produtos_df(df):
             preco_venda = 0.0
 
         permite_desc_raw = row.get("permite_desconto", 1)
-        if str(permite_desc_raw).strip().lower() in ["0", "false", "nao", "não", "n"]:
-            permite_desconto = 0
-        else:
-            permite_desconto = 1
-
-        c.execute('''
-            INSERT INTO produtos (nome, descricao, preco_custo, preco_venda, imagem_path, permite_desconto)
-            VALUES (?, ?, ?, ?, ?, ?)
-        ''', (nome, descricao, preco_custo, preco_venda, "", permite_desconto))
-        qtd_inseridos += 1
-
-    conn.commit()
-    conn.close()
-    return qtd_inseridos
-
-# --- OPERAÇÕES CLIENTES ---
-def cadastrar_cliente(nome, documento, email, telefone, endereco, observacoes):
-    conn = sqlite3.connect("catalogo.db")
-    c = conn.cursor()
-    c.execute('''
-        INSERT INTO clientes (nome, documento, email, telefone, endereco, observacoes)
-        VALUES (?, ?, ?, ?, ?, ?)
-    ''', (nome, documento, email, telefone, endereco, observacoes))
-    conn.commit()
-    conn.close()
-
-def atualizar_cliente(cliente_id, nome, documento, email, telefone, endereco, observacoes):
-    conn = sqlite3.connect("catalogo.db")
-    c = conn.cursor()
-    c.execute('''
-        UPDATE clientes 
-        SET nome = ?, documento = ?, email = ?, telefone = ?, endereco = ?, observacoes = ?
-        WHERE id
