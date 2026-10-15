@@ -1,7 +1,7 @@
 import streamlit as st
 import os
 import pandas as pd
-import libsql_experimental as libsql
+import turso_serverless
 from pdf_generator import gerar_pdf_cliente, gerar_pdf_interno
 
 # Configuração da página
@@ -113,15 +113,12 @@ if not os.path.exists(UPLOADS_DIR):
 def get_connection():
     url = st.secrets["turso"]["url"]
     auth_token = st.secrets["turso"]["auth_token"]
-    conn = libsql.connect("catalogo.db", sync_url=url, auth_token=auth_token)
-    conn.sync()
-    return conn
+    return turso_serverless.connect(url, auth_token=auth_token)
 
 def init_db():
     conn = get_connection()
-    c = conn.cursor()
     
-    c.execute('''
+    conn.execute('''
         CREATE TABLE IF NOT EXISTS produtos (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             nome TEXT NOT NULL,
@@ -133,7 +130,7 @@ def init_db():
         )
     ''')
     
-    c.execute('''
+    conn.execute('''
         CREATE TABLE IF NOT EXISTS clientes (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             nome TEXT NOT NULL,
@@ -144,7 +141,6 @@ def init_db():
             observacoes TEXT
         )
     ''')
-
     conn.commit()
     conn.close()
 
@@ -152,8 +148,7 @@ init_db()
 
 def cadastrar_produto(nome, descricao, preco_custo, preco_venda, imagem_path, permite_desconto):
     conn = get_connection()
-    c = conn.cursor()
-    c.execute('''
+    conn.execute('''
         INSERT INTO produtos (nome, descricao, preco_custo, preco_venda, imagem_path, permite_desconto)
         VALUES (?, ?, ?, ?, ?, ?)
     ''', (nome, descricao, preco_custo, preco_venda, imagem_path, 1 if permite_desconto else 0))
@@ -162,8 +157,7 @@ def cadastrar_produto(nome, descricao, preco_custo, preco_venda, imagem_path, pe
 
 def atualizar_produto(prod_id, nome, descricao, preco_custo, preco_venda, imagem_path, permite_desconto):
     conn = get_connection()
-    c = conn.cursor()
-    c.execute('''
+    conn.execute('''
         UPDATE produtos 
         SET nome = ?, descricao = ?, preco_custo = ?, preco_venda = ?, imagem_path = ?, permite_desconto = ?
         WHERE id = ?
@@ -173,8 +167,7 @@ def atualizar_produto(prod_id, nome, descricao, preco_custo, preco_venda, imagem
 
 def excluir_produto(prod_id):
     conn = get_connection()
-    c = conn.cursor()
-    c.execute('DELETE FROM produtos WHERE id = ?', (prod_id,))
+    conn.execute('DELETE FROM produtos WHERE id = ?', (prod_id,))
     conn.commit()
     conn.close()
 
@@ -186,8 +179,7 @@ def listar_produtos():
 
 def cadastrar_cliente(nome, documento, email, telefone, endereco, observacoes):
     conn = get_connection()
-    c = conn.cursor()
-    c.execute('''
+    conn.execute('''
         INSERT INTO clientes (nome, documento, email, telefone, endereco, observacoes)
         VALUES (?, ?, ?, ?, ?, ?)
     ''', (nome, documento, email, telefone, endereco, observacoes))
@@ -196,8 +188,7 @@ def cadastrar_cliente(nome, documento, email, telefone, endereco, observacoes):
 
 def atualizar_cliente(cliente_id, nome, documento, email, telefone, endereco, observacoes):
     conn = get_connection()
-    c = conn.cursor()
-    c.execute('''
+    conn.execute('''
         UPDATE clientes 
         SET nome = ?, documento = ?, email = ?, telefone = ?, endereco = ?, observacoes = ?
         WHERE id = ?
@@ -207,8 +198,7 @@ def atualizar_cliente(cliente_id, nome, documento, email, telefone, endereco, ob
 
 def excluir_cliente(cliente_id):
     conn = get_connection()
-    c = conn.cursor()
-    c.execute('DELETE FROM clientes WHERE id = ?', (cliente_id,))
+    conn.execute('DELETE FROM clientes WHERE id = ?', (cliente_id,))
     conn.commit()
     conn.close()
 
@@ -555,7 +545,7 @@ elif menu == "📝 Criar Orçamento":
             col_a, col_b, col_c = st.columns(3)
             col_a.metric("Total Custo (Interno)", f"R$ {total_custo:.2f}")
             col_b.metric("Total Venda (Cliente)", f"R$ {total_venda:.2f}")
-            col_c.metric("Lucro Bruto", f"R$ {lucro_estimado:.2f}")
+            col_c.metric("Lucro Bruto", f"R$ {luc_estimado:.2f}")
 
             if st.button("Limpar Orçamento"):
                 st.session_state.carrinho = []
