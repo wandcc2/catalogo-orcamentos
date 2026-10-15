@@ -2,6 +2,7 @@ streamlit
 pandas
 sqlalchemy
 psycopg2-binary
+libsql-experimental
 reportlab
 altair==6.3.0
 anyio==4.15.1
