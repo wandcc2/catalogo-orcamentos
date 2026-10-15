@@ -1,7 +1,7 @@
 import streamlit as st
 import os
-import sqlite3
 import pandas as pd
+import libsql_experimental as libsql
 from pdf_generator import gerar_pdf_cliente, gerar_pdf_interno
 
 # Configuração da página
@@ -12,18 +12,9 @@ st.set_page_config(
 )
 
 # -------------------------------------------------------------------
-# FUNÇÃO PARA CALCULAR DESCONTO PROGRESSIVO (FAIXAS ATUALIZADAS)
+# FUNÇÃO PARA CALCULAR DESCONTO PROGRESSIVO
 # -------------------------------------------------------------------
 def calcular_desconto_progressivo(quantidade, preco_venda_original, permite_desconto):
-    """
-    Aplica a nova regra de desconto baseada na quantidade:
-    - Até 10 un: 0%
-    - 11 a 20 un: 10%
-    - 21 a 30 un: 15%
-    - 31 a 40 un: 20%
-    - 41 a 50 un: 22%
-    - 51 ou mais un: 25%
-    """
     if not permite_desconto:
         return 0.0, preco_venda_original
 
@@ -44,7 +35,7 @@ def calcular_desconto_progressivo(quantidade, preco_venda_original, permite_desc
     return percentual_desconto, preco_com_desconto
 
 # -------------------------------------------------------------------
-# ESTILIZAÇÃO CSS PARA OS BOTÕES DA BARRA LATERAL
+# ESTILIZAÇÃO CSS
 # -------------------------------------------------------------------
 st.markdown("""
     <style>
@@ -113,17 +104,23 @@ if not verificar_login():
     st.stop()
 
 # -------------------------------------------------------------------
-# BANCO DE DADOS
+# BANCO DE DADOS (TURSO / NUVEM)
 # -------------------------------------------------------------------
 UPLOADS_DIR = "uploads"
 if not os.path.exists(UPLOADS_DIR):
     os.makedirs(UPLOADS_DIR)
 
+def get_connection():
+    url = st.secrets["turso"]["url"]
+    auth_token = st.secrets["turso"]["auth_token"]
+    conn = libsql.connect("catalogo.db", sync_url=url, auth_token=auth_token)
+    conn.sync()
+    return conn
+
 def init_db():
-    conn = sqlite3.connect("catalogo.db")
+    conn = get_connection()
     c = conn.cursor()
     
-    # Tabela de Produtos
     c.execute('''
         CREATE TABLE IF NOT EXISTS produtos (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -135,12 +132,7 @@ def init_db():
             permite_desconto INTEGER DEFAULT 1
         )
     ''')
-    try:
-        c.execute('ALTER TABLE produtos ADD COLUMN permite_desconto INTEGER DEFAULT 1')
-    except Exception:
-        pass
-
-    # Tabela de Clientes
+    
     c.execute('''
         CREATE TABLE IF NOT EXISTS clientes (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -158,9 +150,8 @@ def init_db():
 
 init_db()
 
-# --- FUNÇÕES PRODUTOS ---
 def cadastrar_produto(nome, descricao, preco_custo, preco_venda, imagem_path, permite_desconto):
-    conn = sqlite3.connect("catalogo.db")
+    conn = get_connection()
     c = conn.cursor()
     c.execute('''
         INSERT INTO produtos (nome, descricao, preco_custo, preco_venda, imagem_path, permite_desconto)
@@ -170,7 +161,7 @@ def cadastrar_produto(nome, descricao, preco_custo, preco_venda, imagem_path, pe
     conn.close()
 
 def atualizar_produto(prod_id, nome, descricao, preco_custo, preco_venda, imagem_path, permite_desconto):
-    conn = sqlite3.connect("catalogo.db")
+    conn = get_connection()
     c = conn.cursor()
     c.execute('''
         UPDATE produtos 
@@ -181,21 +172,20 @@ def atualizar_produto(prod_id, nome, descricao, preco_custo, preco_venda, imagem
     conn.close()
 
 def excluir_produto(prod_id):
-    conn = sqlite3.connect("catalogo.db")
+    conn = get_connection()
     c = conn.cursor()
     c.execute('DELETE FROM produtos WHERE id = ?', (prod_id,))
     conn.commit()
     conn.close()
 
 def listar_produtos():
-    conn = sqlite3.connect("catalogo.db")
+    conn = get_connection()
     df = pd.read_sql_query("SELECT * FROM produtos", conn)
     conn.close()
     return df
 
-# --- FUNÇÕES CLIENTES ---
 def cadastrar_cliente(nome, documento, email, telefone, endereco, observacoes):
-    conn = sqlite3.connect("catalogo.db")
+    conn = get_connection()
     c = conn.cursor()
     c.execute('''
         INSERT INTO clientes (nome, documento, email, telefone, endereco, observacoes)
@@ -205,7 +195,7 @@ def cadastrar_cliente(nome, documento, email, telefone, endereco, observacoes):
     conn.close()
 
 def atualizar_cliente(cliente_id, nome, documento, email, telefone, endereco, observacoes):
-    conn = sqlite3.connect("catalogo.db")
+    conn = get_connection()
     c = conn.cursor()
     c.execute('''
         UPDATE clientes 
@@ -216,14 +206,14 @@ def atualizar_cliente(cliente_id, nome, documento, email, telefone, endereco, ob
     conn.close()
 
 def excluir_cliente(cliente_id):
-    conn = sqlite3.connect("catalogo.db")
+    conn = get_connection()
     c = conn.cursor()
     c.execute('DELETE FROM clientes WHERE id = ?', (cliente_id,))
     conn.commit()
     conn.close()
 
 def listar_clientes():
-    conn = sqlite3.connect("catalogo.db")
+    conn = get_connection()
     df = pd.read_sql_query("SELECT * FROM clientes ORDER BY nome ASC", conn)
     conn.close()
     return df
@@ -405,7 +395,6 @@ elif menu == "👤 Gestão de Clientes":
     
     tab_listar, tab_cadastrar, tab_editar = st.tabs(["📋 Lista de Clientes", "➕ Cadastrar Cliente", "✏️ Editar / Excluir"])
 
-    # --- Sub-aba: Listar Clientes ---
     with tab_listar:
         df_clientes = listar_clientes()
         if df_clientes.empty:
@@ -437,7 +426,6 @@ elif menu == "👤 Gestão de Clientes":
                     
                     st.write(f"**Observações:** {cli['observacoes'] or 'Sem observações'}")
 
-    # --- Sub-aba: Cadastrar Cliente ---
     with tab_cadastrar:
         st.subheader("Novo Cadastro de Cliente")
         with st.form("form_cadastrar_cliente", clear_on_submit=True):
@@ -461,7 +449,6 @@ elif menu == "👤 Gestão de Clientes":
                     st.success(f"Cliente '{nome_cli}' cadastrado com sucesso!")
                     st.rerun()
 
-    # --- Sub-aba: Editar / Excluir Cliente ---
     with tab_editar:
         df_clientes = listar_clientes()
         if df_clientes.empty:
