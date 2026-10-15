@@ -104,7 +104,7 @@ if not verificar_login():
     st.stop()
 
 # -------------------------------------------------------------------
-# BANCO DE DADOS (TURSO / NUVEM)
+# BANCO DE DADOS (TURSO / NUVEM COM CACHE)
 # -------------------------------------------------------------------
 UPLOADS_DIR = "uploads"
 if not os.path.exists(UPLOADS_DIR):
@@ -117,7 +117,6 @@ def get_connection():
 
 def init_db():
     conn = get_connection()
-    
     conn.execute('''
         CREATE TABLE IF NOT EXISTS produtos (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -129,7 +128,6 @@ def init_db():
             permite_desconto INTEGER DEFAULT 1
         )
     ''')
-    
     conn.execute('''
         CREATE TABLE IF NOT EXISTS clientes (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -146,6 +144,7 @@ def init_db():
 
 init_db()
 
+# --- FUNÇÕES PRODUTOS (Com Cache Otimizado) ---
 def cadastrar_produto(nome, descricao, preco_custo, preco_venda, imagem_path, permite_desconto):
     conn = get_connection()
     conn.execute('''
@@ -154,6 +153,7 @@ def cadastrar_produto(nome, descricao, preco_custo, preco_venda, imagem_path, pe
     ''', (nome, descricao, preco_custo, preco_venda, imagem_path, 1 if permite_desconto else 0))
     conn.commit()
     conn.close()
+    st.cache_data.clear()  # Limpa o cache para atualizar os dados na tela
 
 def atualizar_produto(prod_id, nome, descricao, preco_custo, preco_venda, imagem_path, permite_desconto):
     conn = get_connection()
@@ -164,19 +164,23 @@ def atualizar_produto(prod_id, nome, descricao, preco_custo, preco_venda, imagem
     ''', (nome, descricao, preco_custo, preco_venda, imagem_path, 1 if permite_desconto else 0, prod_id))
     conn.commit()
     conn.close()
+    st.cache_data.clear()
 
 def excluir_produto(prod_id):
     conn = get_connection()
     conn.execute('DELETE FROM produtos WHERE id = ?', (prod_id,))
     conn.commit()
     conn.close()
+    st.cache_data.clear()
 
+@st.cache_data(ttl=600)  # Mantém os produtos em cache por até 10 minutos
 def listar_produtos():
     conn = get_connection()
     df = pd.read_sql_query("SELECT * FROM produtos", conn)
     conn.close()
     return df
 
+# --- FUNÇÕES CLIENTES (Com Cache Otimizado) ---
 def cadastrar_cliente(nome, documento, email, telefone, endereco, observacoes):
     conn = get_connection()
     conn.execute('''
@@ -185,6 +189,7 @@ def cadastrar_cliente(nome, documento, email, telefone, endereco, observacoes):
     ''', (nome, documento, email, telefone, endereco, observacoes))
     conn.commit()
     conn.close()
+    st.cache_data.clear()
 
 def atualizar_cliente(cliente_id, nome, documento, email, telefone, endereco, observacoes):
     conn = get_connection()
@@ -195,13 +200,16 @@ def atualizar_cliente(cliente_id, nome, documento, email, telefone, endereco, ob
     ''', (nome, documento, email, telefone, endereco, observacoes, cliente_id))
     conn.commit()
     conn.close()
+    st.cache_data.clear()
 
 def excluir_cliente(cliente_id):
     conn = get_connection()
     conn.execute('DELETE FROM clientes WHERE id = ?', (cliente_id,))
     conn.commit()
     conn.close()
+    st.cache_data.clear()
 
+@st.cache_data(ttl=600)  # Mantém os clientes em cache por até 10 minutos
 def listar_clientes():
     conn = get_connection()
     df = pd.read_sql_query("SELECT * FROM clientes ORDER BY nome ASC", conn)
