@@ -1,21 +1,31 @@
 import os
 from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 
-def gerar_pdf_cliente(carrinho, caminho_saida, nome_cliente):
+def gerar_pdf_cliente(carrinho, caminho_saida, nome_cliente, logo_path=None):
     doc = SimpleDocTemplate(caminho_saida, pagesize=A4, rightMargin=30, leftMargin=30, topMargin=30, bottomMargin=30)
     story = []
     styles = getSampleStyleSheet()
 
     # Estilos
-    style_titulo = ParagraphStyle('Titulo', parent=styles['Heading1'], fontSize=18, textColor=colors.HexColor('#1d4ed8'), spaceAfter=10)
+    style_titulo = ParagraphStyle('Titulo', parent=styles['Heading1'], fontSize=18, textColor=colors.HexColor('#1d4ed8'), spaceAfter=5)
     style_normal = ParagraphStyle('NormalCustom', parent=styles['Normal'], fontSize=10, textColor=colors.HexColor('#333333'))
     style_tabela_header = ParagraphStyle('TableHeader', parent=styles['Normal'], fontSize=10, textColor=colors.white, fontName='Helvetica-Bold')
     style_legenda = ParagraphStyle('Legenda', parent=styles['Normal'], fontSize=9, textColor=colors.HexColor('#1d4ed8'))
+    style_pagamento = ParagraphStyle('Pagamento', parent=styles['Normal'], fontSize=9, textColor=colors.HexColor('#111827'), leading=14)
 
-    # Cabeçalho
+    # Cabeçalho com Logo (se houver) e Título lado a lado ou empilhados
+    if logo_path and os.path.exists(logo_path):
+        try:
+            img_logo = Image(logo_path, width=100, height=50)
+            img_logo.hAlign = 'LEFT'
+            story.append(img_logo)
+            story.append(Spacer(1, 10))
+        except Exception:
+            pass
+
     story.append(Paragraph("<b>ORÇAMENTO DE PRODUTOS</b>", style_titulo))
     story.append(Paragraph(f"<b>Cliente:</b> {nome_cliente}", style_normal))
     story.append(Spacer(1, 15))
@@ -62,9 +72,26 @@ def gerar_pdf_cliente(carrinho, caminho_saida, nome_cliente):
     # Total
     style_total = ParagraphStyle('Total', parent=styles['Heading2'], fontSize=12, alignment=2, textColor=colors.HexColor('#111827'))
     story.append(Paragraph(f"<b>Total: R$ {total_venda:.2f}</b>", style_total))
-    story.append(Spacer(1, 20))
+    story.append(Spacer(1, 10))
 
-    # Caixa de Legenda do Desconto Progressivo (TEXTO ATUALIZADO AQUI)
+    # Caixa de Condições de Pagamento
+    texto_pagamento = """
+    <b>CONDIÇÕES DE PAGAMENTO:</b><br/>
+    • <b>À Vista (10% de Desconto):</b> R$ """ + f"{total_venda * 0.9:.2f}" + """<br/>
+    • <b>1+1 (50% / 50%):</b> 1ª Entrada no ato do pedido (R$ """ + f"{total_venda / 2:.2f}" + """) + 2ª Parcela na entrega (R$ """ + f"{total_venda / 2:.2f}" + """).
+    """
+
+    tabela_pagamento = Table([[Paragraph(texto_pagamento, style_pagamento)]], colWidths=[530])
+    tabela_pagamento.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor('#f9fafb')),
+        ('BOX', (0, 0), (-1, -1), 1, colors.HexColor('#d1d5db')),
+        ('PADDING', (0, 0), (-1, -1), 8),
+    ]))
+    
+    story.append(tabela_pagamento)
+    story.append(Spacer(1, 15))
+
+    # Caixa de Legenda do Desconto Progressivo
     texto_legenda = """
     <b>TABELA DE DESCONTO PROGRESSIVO POR QUANTIDADE DE CAMISETAS:</b><br/>
     • Até 10 un: <b>Sem Desconto</b> | • 11 a 20 un: <b>10%</b> | • 21 a 30 un: <b>15%</b><br/>
