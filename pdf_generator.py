@@ -1,266 +1,146 @@
 import os
-from reportlab.lib.pagesizes import letter
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 
-def obter_logo_cabecalho():
-    """Verifica se existe uma imagem de logo na raiz do projeto e a retorna formatada."""
-    caminhos_possiveis = ["logo.png", "logo.jpg", "logo.jpeg"]
-    for caminho in caminhos_possiveis:
-        if os.path.exists(caminho):
-            try:
-                return Image(caminho, width=120, height=50)
-            except Exception:
-                return None
-    return None
-
-def gerar_pdf_cliente(carrinho, output_path="orcamento_cliente.pdf", nome_cliente="Cliente"):
-    """
-    Gera o PDF do orçamento para o cliente com logo, descontos por quantidade 
-    e condições de pagamento.
-    """
-    doc = SimpleDocTemplate(
-        output_path,
-        pagesize=letter,
-        rightMargin=36,
-        leftMargin=36,
-        topMargin=36,
-        bottomMargin=36
-    )
+def gerar_pdf_cliente(carrinho, caminho_saida, nome_cliente):
+    doc = SimpleDocTemplate(caminho_saida, pagesize=A4, rightMargin=30, leftMargin=30, topMargin=30, bottomMargin=30)
     story = []
     styles = getSampleStyleSheet()
 
-    title_style = ParagraphStyle(
-        'TitleStyle',
-        parent=styles['Heading1'],
-        fontSize=18,
-        textColor=colors.HexColor('#1A2B4C'),
-        spaceAfter=6
-    )
+    # Estilos
+    style_titulo = ParagraphStyle('Titulo', parent=styles['Heading1'], fontSize=18, textColor=colors.HexColor('#1d4ed8'), spaceAfter=10)
+    style_normal = ParagraphStyle('NormalCustom', parent=styles['Normal'], fontSize=10, textColor=colors.HexColor('#333333'))
+    style_tabela_header = ParagraphStyle('TableHeader', parent=styles['Normal'], fontSize=10, textColor=colors.white, fontName='Helvetica-Bold')
+    style_legenda = ParagraphStyle('Legenda', parent=styles['Normal'], fontSize=9, textColor=colors.HexColor('#1d4ed8'))
 
-    # -------------------------------------------------------------------
-    # CABEÇALHO (LOGO + TÍTULO / CLIENTE)
-    # -------------------------------------------------------------------
-    img_logo = obter_logo_cabecalho()
-    p_titulo = Paragraph(f"<b>ORÇAMENTO DE VENDA</b><br/><font size=11 color='#555555'>Cliente: {nome_cliente}</font>", title_style)
-
-    if img_logo:
-        header_table = Table([[img_logo, p_titulo]], colWidths=[140, 400])
-        header_table.setStyle(TableStyle([
-            ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
-            ('ALIGN', (0,0), (0,0), 'LEFT'),
-            ('ALIGN', (1,0), (1,0), 'RIGHT'),
-        ]))
-        story.append(header_table)
-    else:
-        story.append(p_titulo)
-
+    # Cabeçalho
+    story.append(Paragraph("<b>ORÇAMENTO DE PRODUTOS</b>", style_titulo))
+    story.append(Paragraph(f"<b>Cliente:</b> {nome_cliente}", style_normal))
     story.append(Spacer(1, 15))
 
-    # -------------------------------------------------------------------
-    # TABELA DE PRODUTOS
-    # -------------------------------------------------------------------
-    data = [["Imagem", "Produto", "Qtd", "Preço Tab.", "Desc.", "Preço Un.", "Subtotal (R$)"]]
-    total = 0.0
+    # Tabela de Itens
+    dados_tabela = [
+        [
+            Paragraph("Item", style_tabela_header),
+            Paragraph("Qtd", style_tabela_header),
+            Paragraph("Preço Tabela", style_tabela_header),
+            Paragraph("Desconto", style_tabela_header),
+            Paragraph("Preço Unit. c/ Desc.", style_tabela_header),
+            Paragraph("Subtotal", style_tabela_header)
+        ]
+    ]
+
+    total_venda = 0.0
 
     for item in carrinho:
-        img = "Sem Imagem"
-        if item.get("imagem_path") and os.path.exists(item["imagem_path"]):
-            try:
-                img = Image(item["imagem_path"], width=40, height=40)
-            except Exception:
-                img = "Sem Imagem"
-
-        qtd = item["quantidade"]
-        venda_unitario = item["preco_venda"]
-        venda_original = item.get("preco_venda_original", venda_unitario)
-        desconto_str = item.get("desconto_aplicado", "0%")
-
-        subtotal = qtd * venda_unitario
-        total += subtotal
-
-        data.append([
-            img,
-            Paragraph(item["nome"], styles['Normal']),
-            str(qtd),
-            f"R$ {venda_original:.2f}",
-            desconto_str,
-            f"R$ {venda_unitario:.2f}",
-            f"R$ {subtotal:.2f}"
+        subtotal = item["preco_venda"] * item["quantidade"]
+        total_venda += subtotal
+        
+        dados_tabela.append([
+            Paragraph(item["nome"], style_normal),
+            Paragraph(str(item["quantidade"]), style_normal),
+            Paragraph(f"R$ {item['preco_venda_original']:.2f}", style_normal),
+            Paragraph(str(item["desconto_aplicado"]), style_normal),
+            Paragraph(f"R$ {item['preco_venda']:.2f}", style_normal),
+            Paragraph(f"R$ {subtotal:.2f}", style_normal)
         ])
 
-    # LINHA DO TOTAL
-    data.append([
-        "", "", "", "", "", 
-        Paragraph("<b>Total:</b>", styles['Normal']), 
-        Paragraph(f"<b>R$ {total:.2f}</b>", styles['Normal'])
-    ])
-
-    col_widths = [50, 180, 35, 75, 45, 75, 80]
-    t = Table(data, colWidths=col_widths)
-    t.setStyle(TableStyle([
-        ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#1A2B4C')),
-        ('TEXTCOLOR', (0,0), (-1,0), colors.whitesmoke),
-        ('ALIGN', (0,0), (-1,-1), 'CENTER'),
-        ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
-        ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
-        ('FONTSIZE', (0,0), (-1,0), 9),
-        ('BOTTOMPADDING', (0,0), (-1,0), 6),
-        ('GRID', (0,0), (-1,-2), 0.5, colors.grey),
-        ('LINEABOVE', (0,-1), (-1,-1), 1, colors.black),
+    tabela = Table(dados_tabela, colWidths=[180, 40, 80, 60, 90, 80])
+    tabela.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#2563eb')),
+        ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('BOTTOMPADDING', (0, 0), (-1, 0), 6),
+        ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#e5e7eb')),
     ]))
-
-    story.append(t)
+    
+    story.append(tabela)
     story.append(Spacer(1, 15))
 
-    # -------------------------------------------------------------------
-    # TABELA INFORMATIVA DA REGRA DE DESCONTO PROGRESSIVO
-    # -------------------------------------------------------------------
-    regra_html = """
-    <b>TABELA DE DESCONTO PROGRESSIVO POR QUANTIDADE:</b><br/>
+    # Total
+    style_total = ParagraphStyle('Total', parent=styles['Heading2'], fontSize=12, alignment=2, textColor=colors.HexColor('#111827'))
+    story.append(Paragraph(f"<b>Total: R$ {total_venda:.2f}</b>", style_total))
+    story.append(Spacer(1, 20))
+
+    # Caixa de Legenda do Desconto Progressivo (TEXTO ATUALIZADO AQUI)
+    texto_legenda = """
+    <b>TABELA DE DESCONTO PROGRESSIVO POR QUANTIDADE DE CAMISETAS:</b><br/>
     • Até 10 un: <b>Sem Desconto</b> | • 11 a 20 un: <b>10%</b> | • 21 a 30 un: <b>15%</b><br/>
     • 31 a 40 un: <b>20%</b> | • 41 a 50 un: <b>22%</b> | • 51+ un: <b>25% de Desconto</b>
     """
-    style_regra = ParagraphStyle('RegraStyle', parent=styles['Normal'], fontSize=8.5, leading=12, textColor=colors.HexColor('#2563EB'))
-    p_regra = Paragraph(regra_html, style_regra)
-
-    t_regra = Table([[p_regra]], colWidths=[540])
-    t_regra.setStyle(TableStyle([
-        ('BACKGROUND', (0,0), (-1,-1), colors.HexColor('#EFF6FF')),
-        ('BOX', (0,0), (-1,-1), 0.5, colors.HexColor('#93C5FD')),
-        ('PADDING', (0,0), (-1,-1), 6),
+    
+    tabela_legenda = Table([[Paragraph(texto_legenda, style_legenda)]], colWidths=[530])
+    tabela_legenda.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor('#eff6ff')),
+        ('BOX', (0, 0), (-1, -1), 1, colors.HexColor('#bfdbfe')),
+        ('PADDING', (0, 0), (-1, -1), 8),
     ]))
-    story.append(t_regra)
-    story.append(Spacer(1, 15))
-
-    # -------------------------------------------------------------------
-    # CONDIÇÕES DE PAGAMENTO
-    # -------------------------------------------------------------------
-    desconto_avista = total * 0.10
-    total_avista = total - desconto_avista
-    entrada_50 = total / 2.0
-
-    condicoes_html = f"""
-    <b>CONDIÇÕES DE PAGAMENTO:</b><br/><br/>
-    • <b>À Vista (10% de Desconto Adicional):</b> R$ {total_avista:.2f} (Economia adicional de R$ {desconto_avista:.2f})<br/>
-    • <b>Parcelado (50% / 50%):</b> 1ª Entrada de R$ {entrada_50:.2f} no ato do pedido + 2ª Parcela de R$ {entrada_50:.2f} no ato da entrega.
-    """
-
-    style_box = ParagraphStyle(
-        'CondicoesStyle',
-        parent=styles['Normal'],
-        fontSize=9.5,
-        leading=13,
-        textColor=colors.HexColor('#1A2B4C')
-    )
-
-    p_condicoes = Paragraph(condicoes_html, style_box)
-
-    t_condicoes = Table([[p_condicoes]], colWidths=[540])
-    t_condicoes.setStyle(TableStyle([
-        ('BACKGROUND', (0,0), (-1,-1), colors.HexColor('#F2F4F8')),
-        ('BOX', (0,0), (-1,-1), 1, colors.HexColor('#1A2B4C')),
-        ('PADDING', (0,0), (-1,-1), 8),
-    ]))
-
-    story.append(t_condicoes)
-
+    
+    story.append(tabela_legenda)
     doc.build(story)
-    return output_path
+    return caminho_saida
 
 
-def gerar_pdf_interno(carrinho, output_path="relatorio_custos_interno.pdf"):
-    """
-    Gera o PDF do relatório interno de custos, margem bruta e lucro previsto.
-    """
-    doc = SimpleDocTemplate(
-        output_path,
-        pagesize=letter,
-        rightMargin=36,
-        leftMargin=36,
-        topMargin=36,
-        bottomMargin=36
-    )
+def gerar_pdf_interno(carrinho, caminho_saida):
+    doc = SimpleDocTemplate(caminho_saida, pagesize=A4, rightMargin=30, leftMargin=30, topMargin=30, bottomMargin=30)
     story = []
     styles = getSampleStyleSheet()
 
-    title_style = ParagraphStyle(
-        'TitleStyle',
-        parent=styles['Heading1'],
-        fontSize=16,
-        textColor=colors.HexColor('#8B0000'),
-        spaceAfter=6
-    )
+    style_titulo = ParagraphStyle('Titulo', parent=styles['Heading1'], fontSize=18, textColor=colors.HexColor('#dc2626'), spaceAfter=10)
+    style_normal = ParagraphStyle('NormalCustom', parent=styles['Normal'], fontSize=10, textColor=colors.HexColor('#333333'))
+    style_tabela_header = ParagraphStyle('TableHeader', parent=styles['Normal'], fontSize=10, textColor=colors.white, fontName='Helvetica-Bold')
 
-    img_logo = obter_logo_cabecalho()
-    p_titulo = Paragraph("<b>RELATÓRIO INTERNO DE CUSTOS E MARGENS</b>", title_style)
-
-    if img_logo:
-        header_table = Table([[img_logo, p_titulo]], colWidths=[140, 400])
-        header_table.setStyle(TableStyle([
-            ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
-            ('ALIGN', (0,0), (0,0), 'LEFT'),
-            ('ALIGN', (1,0), (1,0), 'RIGHT'),
-        ]))
-        story.append(header_table)
-    else:
-        story.append(p_titulo)
-
+    story.append(Paragraph("<b>RELATÓRIO DE CUSTO E LUCRO INTERNO</b>", style_titulo))
     story.append(Spacer(1, 15))
 
-    data = [["Produto", "Qtd", "Custo Un.", "Venda Un.", "Desc. Quant.", "Subtotal Custo", "Subtotal Venda", "Lucro (R$)"]]
-    
+    dados_tabela = [
+        [
+            Paragraph("Item", style_tabela_header),
+            Paragraph("Qtd", style_tabela_header),
+            Paragraph("Custo Unit.", style_tabela_header),
+            Paragraph("Venda Unit.", style_tabela_header),
+            Paragraph("Subtotal Custo", style_tabela_header),
+            Paragraph("Subtotal Venda", style_tabela_header)
+        ]
+    ]
+
     total_custo = 0.0
     total_venda = 0.0
 
     for item in carrinho:
-        qtd = item["quantidade"]
-        custo = item["preco_custo"]
-        venda = item["preco_venda"]
-        desconto_str = item.get("desconto_aplicado", "0%")
-        
-        sub_custo = qtd * custo
-        sub_venda = qtd * venda
-        lucro_item = sub_venda - sub_custo
-
+        sub_custo = item["preco_custo"] * item["quantidade"]
+        sub_venda = item["preco_venda"] * item["quantidade"]
         total_custo += sub_custo
         total_venda += sub_venda
 
-        data.append([
-            Paragraph(item["nome"], styles['Normal']),
-            str(qtd),
-            f"{custo:.2f}",
-            f"{venda:.2f}",
-            desconto_str,
-            f"{sub_custo:.2f}",
-            f"{sub_venda:.2f}",
-            f"{lucro_item:.2f}"
+        dados_tabela.append([
+            Paragraph(item["nome"], style_normal),
+            Paragraph(str(item["quantidade"]), style_normal),
+            Paragraph(f"R$ {item['preco_custo']:.2f}", style_normal),
+            Paragraph(f"R$ {item['preco_venda']:.2f}", style_normal),
+            Paragraph(f"R$ {sub_custo:.2f}", style_normal),
+            Paragraph(f"R$ {sub_venda:.2f}", style_normal)
         ])
 
-    lucro_total = total_venda - total_custo
-
-    data.append([
-        "Total Geral", "", "", "", "", 
-        f"{total_custo:.2f}", 
-        f"{total_venda:.2f}", 
-        f"{lucro_total:.2f}"
-    ])
-
-    t = Table(data, colWidths=[120, 30, 55, 55, 65, 70, 75, 70])
-    t.setStyle(TableStyle([
-        ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#8B0000')),
-        ('TEXTCOLOR', (0,0), (-1,0), colors.whitesmoke),
-        ('ALIGN', (0,0), (-1,-1), 'CENTER'),
-        ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
-        ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
-        ('FONTSIZE', (0,0), (-1,0), 8),
-        ('BOTTOMPADDING', (0,0), (-1,0), 6),
-        ('GRID', (0,0), (-1,-2), 0.5, colors.grey),
-        ('BACKGROUND', (0,-1), (-1,-1), colors.HexColor('#F0F0F0')),
-        ('FONTNAME', (0,-1), (-1,-1), 'Helvetica-Bold'),
+    tabela = Table(dados_tabela, colWidths=[180, 40, 75, 75, 80, 80])
+    tabela.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#991b1b')),
+        ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('BOTTOMPADDING', (0, 0), (-1, 0), 6),
+        ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#e5e7eb')),
     ]))
 
-    story.append(t)
+    story.append(tabela)
+    story.append(Spacer(1, 15))
+
+    lucro = total_venda - total_custo
+    style_resumo = ParagraphStyle('Resumo', parent=styles['Normal'], fontSize=11, alignment=2)
+    story.append(Paragraph(f"<b>Custo Total:</b> R$ {total_custo:.2f}", style_resumo))
+    story.append(Paragraph(f"<b>Venda Total:</b> R$ {total_venda:.2f}", style_resumo))
+    story.append(Paragraph(f"<b>Lucro Bruto Estimado:</b> R$ {lucro:.2f}", style_resumo))
+
     doc.build(story)
-    return output_path
+    return caminho_saida
