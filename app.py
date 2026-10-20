@@ -536,11 +536,14 @@ elif menu == "📝 Criar Orçamento":
             else:
                 nome_cliente_final = cliente_selecionado_opcao
 
+            # Defina o caminho da sua logo aqui (ex: "logo.png" se estiver na pasta principal)
+            caminho_logo = "logo.png" if os.path.exists("logo.png") else None
+
             col_pdf1, col_pdf2 = st.columns(2)
 
             with col_pdf1:
                 if st.button("📄 Gerar Orçamento do Cliente (PDF)"):
-                    pdf_path = gerar_pdf_cliente(st.session_state.carrinho, "orcamento_cliente.pdf", nome_cliente_final)
+                    pdf_path = gerar_pdf_cliente(st.session_state.carrinho, "orcamento_cliente.pdf", nome_cliente_final, logo_path=caminho_logo)
                     with open(pdf_path, "rb") as f:
                         st.download_button(
                             label="📥 Baixar Orçamento do Cliente",
