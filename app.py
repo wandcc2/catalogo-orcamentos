@@ -262,4 +262,38 @@ if menu == "📋 Catálogo de Produtos":
         st.caption(f"Exibindo {len(df_produtos)} produto(s). Clique em um item para ver detalhes e imagem.")
 
         for _, row in df_produtos.iterrows():
-            tag_desconto = "🏷️ Aceita Desc. Progressivo" if row.get("permite_desconto
+            tag_desconto = "🏷️ Aceita Desc. Progressivo" if row.get("permite_desconto", 1) == 1 else "🚫 Sem Desc. Progressivo"
+            titulo_item = f"📦 {row['nome']}  —  R$ {row['preco_venda']:.2f}  ({tag_desconto})"
+            
+            with st.expander(titulo_item):
+                col_img, col_detalhes = st.columns([1, 2])
+                with col_img:
+                    if row["imagem_path"] and os.path.exists(row["imagem_path"]):
+                        st.image(row["imagem_path"], use_container_width=True)
+                    else:
+                        st.info("Sem imagem cadastrada")
+
+                with col_detalhes:
+                    st.markdown(f"### {row['nome']}")
+                    st.write(f"**Descrição:** {row['descricao'] or 'Sem descrição'}")
+                    st.caption(f"Configuração de Desconto: **{tag_desconto}**")
+                    st.divider()
+                    
+                    c1, c2, c3 = st.columns(3)
+                    c1.metric("Preço de Custo", f"R$ {row['preco_custo']:.2f}")
+                    c2.metric("Preço de Venda (Base)", f"R$ {row['preco_venda']:.2f}")
+                    c3.metric("Margem Bruta (Base)", f"R$ {row['preco_venda'] - row['preco_custo']:.2f}")
+
+# -------------------------------------------------------------------
+# ABA 2: CADASTRAR PRODUTO
+# -------------------------------------------------------------------
+elif menu == "➕ Cadastrar Produto":
+    st.header("Cadastrar Novo Item")
+
+    with st.form("form_produto", clear_on_submit=True):
+        nome = st.text_input("Nome do Produto *")
+        descricao = st.text_area("Descrição / Especificações")
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            preco_custo = st.number_input("Preço de Custo (R$) *", min_value=0
