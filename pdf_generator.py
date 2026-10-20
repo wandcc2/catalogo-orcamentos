@@ -4,7 +4,7 @@ from reportlab.lib import colors
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 
-def gerar_pdf_cliente(carrinho, caminho_saida, nome_cliente, logo_path=None):
+def gerar_pdf_cliente(carrinho, caminho_saida, nome_cliente, logo_path=None, observacoes=""):
     doc = SimpleDocTemplate(caminho_saida, pagesize=A4, rightMargin=30, leftMargin=30, topMargin=30, bottomMargin=30)
     story = []
     styles = getSampleStyleSheet()
@@ -15,8 +15,9 @@ def gerar_pdf_cliente(carrinho, caminho_saida, nome_cliente, logo_path=None):
     style_tabela_header = ParagraphStyle('TableHeader', parent=styles['Normal'], fontSize=10, textColor=colors.white, fontName='Helvetica-Bold')
     style_legenda = ParagraphStyle('Legenda', parent=styles['Normal'], fontSize=9, textColor=colors.HexColor('#1d4ed8'))
     style_pagamento = ParagraphStyle('Pagamento', parent=styles['Normal'], fontSize=9, textColor=colors.HexColor('#111827'), leading=14)
+    style_obs = ParagraphStyle('Obs', parent=styles['Normal'], fontSize=9, textColor=colors.HexColor('#374151'), leading=13)
 
-    # Cabeçalho com Logo (se houver) e Título lado a lado ou empilhados
+    # Cabeçalho com Logo (se houver)
     if logo_path and os.path.exists(logo_path):
         try:
             img_logo = Image(logo_path, width=100, height=50)
@@ -74,11 +75,23 @@ def gerar_pdf_cliente(carrinho, caminho_saida, nome_cliente, logo_path=None):
     story.append(Paragraph(f"<b>Total: R$ {total_venda:.2f}</b>", style_total))
     story.append(Spacer(1, 10))
 
+    # Observações (Se houver preenchimento)
+    if observacoes and observacoes.strip():
+        texto_observacao = f"<b>OBSERVAÇÕES:</b><br/>{observacoes.replace(chr(10), '<br/>')}"
+        tabela_obs = Table([[Paragraph(texto_observacao, style_obs)]], colWidths=[530])
+        tabela_obs.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor('#fffbeb')),
+            ('BOX', (0, 0), (-1, -1), 1, colors.HexColor('#fde68a')),
+            ('PADDING', (0, 0), (-1, -1), 8),
+        ]))
+        story.append(tabela_obs)
+        story.append(Spacer(1, 10))
+
     # Caixa de Condições de Pagamento
-    texto_pagamento = """
+    texto_pagamento = f"""
     <b>CONDIÇÕES DE PAGAMENTO:</b><br/>
-    • <b>À Vista (10% de Desconto):</b> R$ """ + f"{total_venda * 0.9:.2f}" + """<br/>
-    • <b>1+1 (50% / 50%):</b> 1ª Entrada no ato do pedido (R$ """ + f"{total_venda / 2:.2f}" + """) + 2ª Parcela na entrega (R$ """ + f"{total_venda / 2:.2f}" + """).
+    • <b>À Vista (10% de Desconto):</b> R$ {total_venda * 0.9:.2f}<br/>
+    • <b>1+1 (50% / 50%):</b> 1ª Entrada no ato do pedido (R$ {total_venda / 2:.2f}) + 2ª Parcela na entrega (R$ {total_venda / 2:.2f}).
     """
 
     tabela_pagamento = Table([[Paragraph(texto_pagamento, style_pagamento)]], colWidths=[530])
