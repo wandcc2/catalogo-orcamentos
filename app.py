@@ -524,7 +524,7 @@ elif menu == "📝 Criar Orçamento":
                 st.rerun()
 
             st.divider()
-            st.subheader("3. Seleção do Cliente e Gerar PDF")
+            st.subheader("3. Seleção do Cliente, Observações e Gerar PDF")
 
             df_clientes = listar_clientes()
             opcoes_clientes = ["-- Digitar Manualmente --"] + df_clientes["nome"].tolist()
@@ -536,6 +536,9 @@ elif menu == "📝 Criar Orçamento":
             else:
                 nome_cliente_final = cliente_selecionado_opcao
 
+            # Campo para digitar a observação do orçamento
+            observacoes_orcamento = st.text_area("Observações para o Orçamento (Opcional)", placeholder="Ex: Prazo de entrega de 10 dias úteis, arte por conta do cliente...")
+
             # Defina o caminho da sua logo aqui (ex: "logo.png" se estiver na pasta principal)
             caminho_logo = "logo.png" if os.path.exists("logo.png") else None
 
@@ -543,7 +546,13 @@ elif menu == "📝 Criar Orçamento":
 
             with col_pdf1:
                 if st.button("📄 Gerar Orçamento do Cliente (PDF)"):
-                    pdf_path = gerar_pdf_cliente(st.session_state.carrinho, "orcamento_cliente.pdf", nome_cliente_final, logo_path=caminho_logo)
+                    pdf_path = gerar_pdf_cliente(
+                        st.session_state.carrinho, 
+                        "orcamento_cliente.pdf", 
+                        nome_cliente_final, 
+                        logo_path=caminho_logo, 
+                        observacoes=observacoes_orcamento
+                    )
                     with open(pdf_path, "rb") as f:
                         st.download_button(
                             label="📥 Baixar Orçamento do Cliente",
